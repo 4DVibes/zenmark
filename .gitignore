@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+.env
+build/
+dist/
+package-lock.json # If you're using npm
+yarn.lock       # If you're using Yarn
+npm-debug.log*
+yarn-error.log*
