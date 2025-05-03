@@ -52,6 +52,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [nodeCounts, setNodeCounts] = useState<{ total: number, folders: number, bookmarks: number } | null>(null);
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null); // State to track inline editing
 
   // --- DND Setup ---
   const sensors = useSensors(
@@ -118,18 +119,72 @@ const App: React.FC = () => {
 
   // --- Context Menu Handlers ---
   const handleEditNode = useCallback((nodeId: string) => {
-    console.log(`[App] Placeholder: Edit node ${nodeId}`);
+    console.log(`[App] Activating edit mode for node ${nodeId}`);
+    setEditingNodeId(nodeId);
     // TODO: Implement inline editing or modal
   }, []);
 
   const handleAddFolder = useCallback((parentId: string | null) => {
-    console.log(`[App] Placeholder: Add folder inside ${parentId ?? 'root'}`);
-    // TODO: Implement folder creation logic
+    const folderName = window.prompt("Enter the name for the new folder:", "New Folder");
+    if (!folderName || folderName.trim() === "") {
+      console.log("[App] Add folder cancelled.");
+      return; // User cancelled or entered empty name
+    }
+
+    const newNode: BookmarkNode = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      title: folderName.trim(),
+      children: [], // Folders always have a children array
+      parentId: parentId // Store parent ID
+    };
+
+    console.log(`[App] Adding new folder "${newNode.title}" inside parent: ${parentId ?? 'root'}`);
+
+    setBookmarks(currentBookmarks => {
+      // Insert inside the target parent, or at the root
+      const position = parentId ? 'inside' : 'root';
+      return insertNode(currentBookmarks, parentId, newNode, position);
+    });
   }, []);
 
   const handleAddBookmark = useCallback((parentId: string | null) => {
-    console.log(`[App] Placeholder: Add bookmark inside ${parentId ?? 'root'}`);
-    // TODO: Implement bookmark creation logic
+    const title = window.prompt("Enter the bookmark title:", "New Bookmark");
+    if (!title || title.trim() === "") {
+      console.log("[App] Add bookmark cancelled (no title).");
+      return;
+    }
+
+    const url = window.prompt("Enter the bookmark URL:");
+    if (!url || url.trim() === "") {
+      console.log("[App] Add bookmark cancelled (no URL).");
+      // Maybe inform user title was entered but URL is required?
+      return;
+    }
+
+    // Basic URL validation (can be enhanced)
+    try {
+      new URL(url.trim()); // Check if it parses as a URL
+    } catch (_) {
+      alert("Invalid URL format. Please enter a valid URL (e.g., https://example.com).");
+      console.log("[App] Add bookmark cancelled (invalid URL).");
+      return;
+    }
+
+    const newNode: BookmarkNode = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      title: title.trim(),
+      url: url.trim(), // Bookmarks have a URL
+      parentId: parentId // Store parent ID
+      // No children array for bookmarks
+    };
+
+    console.log(`[App] Adding new bookmark "${newNode.title}" inside parent: ${parentId ?? 'root'}`);
+
+    setBookmarks(currentBookmarks => {
+      // Insert inside the target parent, or at the root
+      const position = parentId ? 'inside' : 'root';
+      return insertNode(currentBookmarks, parentId, newNode, position);
+    });
   }, []);
 
   /** Handles deleting a node */
@@ -159,6 +214,42 @@ const App: React.FC = () => {
       return newTree;
     });
   }, []); // useCallback with empty dependency array as it only uses setBookmarks
+
+  /** Handles renaming a node after inline editing */
+  const handleRenameNode = useCallback((nodeId: string, newTitle: string) => {
+    console.log(`[App:handleRenameNode] Received call to rename node ${nodeId} to "${newTitle}"`); // Log entry
+    setBookmarks(currentBookmarks => {
+      // Function to recursively find and update the node
+      const updateNodeTitle = (nodes: BookmarkNode[]): BookmarkNode[] => {
+        return nodes.map(node => {
+          if (node.id === nodeId) {
+            // Found the node, return a new object with the updated title
+            console.log(`  Found node ${nodeId}, updating title.`);
+            return { ...node, title: newTitle };
+          }
+          // If the node has children, recursively update them
+          if (node.children) {
+            const updatedChildren = updateNodeTitle(node.children);
+            // Only return a new object if children actually changed
+            if (updatedChildren !== node.children) {
+              return { ...node, children: updatedChildren };
+            }
+          }
+          // No changes needed for this node or its children
+          return node;
+        });
+      };
+
+      const updatedBookmarks = updateNodeTitle(currentBookmarks);
+
+      // Check if the update actually changed the array to prevent unnecessary re-renders
+      if (updatedBookmarks === currentBookmarks) {
+        console.warn(`  Node ${nodeId} not found for renaming.`);
+      }
+      return updatedBookmarks;
+    });
+    setEditingNodeId(null); // Exit editing mode
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -461,17 +552,23 @@ const App: React.FC = () => {
                 onEditNode={handleEditNode}
                 onAddFolder={handleAddFolder}
                 onAddBookmark={handleAddBookmark}
+                editingNodeId={editingNodeId}
+                handleRenameNode={handleRenameNode}
               />
             </div>
 
             {/* Right Panel: Bookmark List */}
             <div className="flex-grow h-full min-w-0"> {/* Takes remaining space, scrollable */}
-              <BookmarkListPanel
-                bookmarkNodes={rightPanelNodes} // Pass the filtered bookmark nodes directly
-                onDeleteNode={handleDeleteNode}
-                onEditNode={handleEditNode}
-                duplicateIds={duplicateIds}
-              />
+              <div className="flex-grow overflow-auto">
+                <BookmarkListPanel
+                  bookmarkNodes={rightPanelNodes} // Pass only the nodes for the right panel
+                  onDeleteNode={handleDeleteNode}
+                  onEditNode={handleEditNode} // Pass edit handler
+                  onAddBookmark={handleAddBookmark} // Pass add bookmark handler (context might differ)
+                  editingNodeId={editingNodeId} // Pass editing state
+                  handleRenameNode={handleRenameNode} // Pass rename handler
+                />
+              </div>
             </div>
           </div>
 

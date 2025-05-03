@@ -50,7 +50,7 @@ This PRD outlines the completed MVP and ongoing development phases.
 - **Requirements Met**:
   - Implemented two-panel layout (`FolderTreePanel`, `BookmarkListPanel`). **Core interaction (selecting folder displays contents) is now functional after parser fixes.**
   - Basic drag-and-drop for reordering within panels using `@dnd-kit/core`.
-  - Right-click deletion implemented.
+  - **Implemented context menus (`react-contexify`) for right-click actions: Add Folder, Add Bookmark, Rename, Delete.**
   - Expand/collapse implemented for folder tree panel.
   - Used Tailwind CSS for styling.
 - **Requirements Pending/Needs Refinement**:
@@ -160,6 +160,7 @@ This PRD outlines the completed MVP and ongoing development phases.
     - [Pending] Add UI (e.g., a form or button) to manually add a new bookmark (URL and title).
     - [Pending] Implement logic to add the new bookmark to the tree structure and persist it.
   - **UI Polish**:
+    - **[Pending] Replace `window.prompt` with modal dialogs for Add/Edit actions.**
     - [Pending] Add UI for viewing/editing tags and notes.
     - [Pending] Improve responsive layout for tablet/smaller screens.
     - [Pending] Implement basic keyboard navigation for accessibility.

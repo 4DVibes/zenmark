@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, memo } from 'react';
 // Assuming we might reuse react-window here too
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
 // Import only BookmarkNode now
@@ -7,72 +7,80 @@ import { BookmarkNode } from '../types/bookmark';
 import BookmarkItem from './BookmarkItem';
 
 interface BookmarkListPanelProps {
-    bookmarkNodes: BookmarkNode[]; // Accept raw bookmark nodes (files only)
-    onDeleteNode: (id: string) => void;
+    bookmarkNodes: BookmarkNode[]; // Only bookmark nodes for the selected folder
+    onDeleteNode: (nodeId: string) => void;
     onEditNode: (nodeId: string) => void;
-    duplicateIds: Set<string>;
-    // Remove onToggleFolderExpand
+    // Add missing props from App.tsx
+    onAddBookmark: (parentId: string | null) => void; // Handler for adding bookmark (context specific?)
+    editingNodeId: string | null;
+    handleRenameNode: (nodeId: string, newTitle: string) => void;
+    duplicateIds?: Set<string>; // Keep duplicateIds optional or handle appropriately
 }
 
-const ROW_HEIGHT = 36; // Keep consistent for now
+// Data passed to each BookmarkItem row
+interface BookmarkItemData {
+    nodes: BookmarkNode[];
+    onDeleteNode: (nodeId: string) => void;
+    onEditNode: (nodeId: string) => void;
+    onAddBookmark: (parentId: string | null) => void; // Pass down handler
+    editingNodeId: string | null; // Pass down editing state
+    handleRenameNode: (nodeId: string, newTitle: string) => void; // Pass down rename handler
+    duplicateIds?: Set<string>;
+}
 
 const BookmarkListPanel: React.FC<BookmarkListPanelProps> = ({
-    bookmarkNodes, // Use new prop name
+    bookmarkNodes,
     onDeleteNode,
     onEditNode,
-    duplicateIds,
+    onAddBookmark, // Receive handler
+    editingNodeId, // Receive state
+    handleRenameNode, // Receive handler
+    duplicateIds
 }) => {
     console.log('BookmarkListPanel rendering with:', { bookmarkNodes });
 
-    // Renderer for each row in the virtualized list
-    const Row: React.FC<ListChildComponentProps> = ({ index, style }) => {
-        const node = bookmarkNodes[index]; // Get the node directly
-        if (!node) return null;
+    const itemData = useMemo<BookmarkItemData>(() => ({
+        nodes: bookmarkNodes,
+        onDeleteNode,
+        onEditNode,
+        onAddBookmark,
+        editingNodeId,
+        handleRenameNode,
+        duplicateIds
+    }), [bookmarkNodes, onDeleteNode, onEditNode, onAddBookmark, editingNodeId, handleRenameNode, duplicateIds]);
 
-        // isExpanded is always false, depth is always 0 for this panel
-        const isExpanded = false;
-        const depth = 0;
-        const isDuplicate = duplicateIds.has(node.id);
+    if (!bookmarkNodes || bookmarkNodes.length === 0) {
+        return <div className="p-4 text-gray-500">Select a folder or upload bookmarks.</div>;
+    }
 
-        // Use the BookmarkItem component for rendering
-        return (
-            <BookmarkItem
-                key={node.id} // Key is important
-                node={node}
-                depth={depth} // Pass 0
-                isExpanded={isExpanded} // Pass false
-                isDuplicate={isDuplicate}
-                onDeleteNode={onDeleteNode}
-                onToggleFolderExpand={() => { }} // Pass a dummy function or make prop optional
-                onEditNode={onEditNode}
-                style={style} // Pass the style from react-window for positioning
-            // DND handlers will need to be managed here or passed down later
-            />
-        );
-    };
+    // Renderer for FixedSizeList
+    const Row = memo(({ index, style, data }: ListChildComponentProps<BookmarkItemData>) => (
+        <BookmarkItem
+            style={style} // Pass style for positioning
+            node={data.nodes[index]}
+            onDeleteNode={data.onDeleteNode}
+            onEditNode={data.onEditNode}
+            onAddBookmark={data.onAddBookmark} // Pass down handler
+            editingNodeId={data.editingNodeId} // Pass down state
+            handleRenameNode={data.handleRenameNode} // Pass down handler
+            isDuplicate={data.duplicateIds?.has(data.nodes[index].id)}
+        />
+    ));
+    Row.displayName = 'BookmarkRow'; // Add display name for DevTools
 
     return (
-        <div className="bookmark-list-panel p-2 flex-grow h-full overflow-hidden">
-            <h2 className="text-lg font-semibold mb-2">Contents</h2>
-            {/* Use a fixed height container for react-window */}
-            <div className="list-container h-[calc(100%-40px)] border rounded overflow-y-auto">
-                {bookmarkNodes.length === 0 ? (
-                    <p className="text-center text-gray-500 p-4">Folder is empty or no items match search.</p>
-                ) : (
-                    <FixedSizeList
-                        height={600} // Adjust as needed
-                        itemCount={bookmarkNodes.length} // Use length of bookmarkNodes
-                        itemSize={ROW_HEIGHT}
-                        width="100%"
-                    // Pass data needed by BookmarkItem down if necessary (alternative to closure)
-                    // itemData={{ onDeleteNode, duplicateIds, onToggleFolderExpand }}
-                    >
-                        {Row}
-                    </FixedSizeList>
-                )}
-            </div>
+        <div className="h-full bg-white">
+            <FixedSizeList
+                height={600} // Adjust or make dynamic
+                itemCount={bookmarkNodes.length}
+                itemSize={40} // Adjust based on BookmarkItem height
+                width="100%"
+                itemData={itemData}
+            >
+                {Row}
+            </FixedSizeList>
         </div>
     );
 };
 
-export default BookmarkListPanel; 
+export default memo(BookmarkListPanel); 
