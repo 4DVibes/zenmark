@@ -86,4 +86,25 @@ export const loadBookmarks = async (): Promise<BookmarkNode[]> => {
         // Depending on requirements, you might want to return empty array or re-throw
         return []; // Return empty array on error to avoid breaking the app
     }
+};
+
+/**
+ * Clears all bookmark data from IndexedDB.
+ * @returns {Promise<void>} A promise that resolves when clearing is complete.
+ */
+export const clearBookmarks = (): Promise<void> => {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const db = await getDB();
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            await store.clear(); // Clear all entries in the store
+            await tx.done; // Wait for the transaction to complete
+            console.log(`Cleared object store '${STORE_NAME}'.`);
+            resolve();
+        } catch (error) {
+            console.error('Failed to clear bookmarks:', error);
+            reject(new Error('Could not clear bookmarks from IndexedDB.'));
+        }
+    });
 }; 

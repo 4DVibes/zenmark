@@ -6,12 +6,16 @@
 Zenmark is a web-based bookmark manager that enables users to import, organize, and export Chrome and Edge bookmark HTML files through a file-manager-like interface. It addresses native browser pain points—massive collections, poor UX, duplicates, and lack of search—by providing scalable storage with client-side persistence (IndexedDB), intuitive drag-and-drop, effective search, duplicate identification, and reliable export, capped at 10,000 bookmarks per upload/session.
 
 ### 1.2 Background
-As of May 1, 2025, the Zenmark web app ([https://github.com/4DVibes/zenmark-web](https://github.com/4DVibes/zenmark-web)) supports:
-- Uploading and parsing Chrome/Edge bookmark HTML files into a nested list.
-- Displaying bookmarks with Tailwind CSS styling.
-- A placeholder export button.
+As of [Current Date - e.g., July 2024], the Zenmark web app ([https://github.com/4DVibes/zenmark-web](https://github.com/4DVibes/zenmark-web)) has completed its core MVP features and initial performance enhancements. It now supports:
+- Uploading and parsing Chrome/Edge bookmark HTML files (up to 10,000 items). **Resolved issues with parsing nested folder structures.**
+- Persistent storage using IndexedDB.
+- A two-panel UI (Folder Tree on left, Contents on right) with virtualization (`react-window`) for scalability.
+- Drag-and-drop reordering (basic implementation, needs refinement for inter-panel drops).
+- Search functionality (filtering both folder tree and content panel).
+- Duplicate detection (based on URL) and removal.
+- Exporting bookmarks back to Chrome/Edge compatible HTML format.
 
-The app’s limited functionality (in-memory storage, no persistence, basic UX) makes it insufficient. This PRD, informed by user research on bookmark hoarding, poor native UX, and scalability needs, defines an MVP with IndexedDB persistence and a 10,000-bookmark cap to enhance usability.
+This PRD outlines the completed MVP and ongoing development phases.
 
 ### 1.3 Goals
 - **Primary Goal**: Deliver an intuitive web app for managing up to 10,000 Chrome/Edge bookmarks with persistent storage.
@@ -31,52 +35,58 @@ The app’s limited functionality (in-memory storage, no persistence, basic UX) 
 
 ## 3. Functional Requirements
 
-### 3.1 Core MVP Features
+### 3.1 Core MVP Features (Completed)
 #### 3.1.1 Scalable Storage and Organization with Persistence
 - **Description**: Handle up to 10,000 bookmarks with flexible organization and client-side persistence.
-- **Requirements**:
-  - Support folders (existing), tags, and notes in `BookmarkNode`.
-  - Cap uploads at 10,000 bookmarks with user-friendly error in `bookmarkParser.ts`.
-  - Use IndexedDB to persist `BookmarkNode` tree across sessions.
-  - Optimize parsing (`bookmarkParser.ts`) and rendering (`BookmarkTree`) for performance.
-- **Success Criteria**: Parse/display 10,000 bookmarks in <2 seconds; data persists after refresh; users can add tags/notes.
+- **Requirements Met**:
+  - Supported `tags` and `notes` in `BookmarkNode` (though UI for editing not yet implemented).
+  - Capped uploads at 10,000 bookmarks in `bookmarkParser.ts`. **Successfully debugged parser for complex nested structures.**
+  - Used IndexedDB (`idb` library) to persist `BookmarkNode` tree across sessions (`bookmarkStorage.ts`).
+  - Implemented basic performance optimization via virtualization (`react-window`) in rendering.
+- **Success Criteria**: Functionality implemented. Performance target (<2s load/display for 10k) needs validation. Data persistence verified. **Parser logic validated.**
 
 #### 3.1.2 Intuitive UX with Drag-and-Drop
 - **Description**: Clean, interactive UI with drag-and-drop and simple actions.
-- **Requirements**:
-  - Implement `BookmarkTree` with expand/collapse, drag-and-drop (`@dnd-kit/core`), and right-click deletion.
-  - Use Tailwind CSS for visual tree view (indented nodes, hover effects).
-  - Support keyboard navigation (arrow keys to toggle folders).
-- **Success Criteria**: Users can drag/reorder bookmarks, delete via right-click, and toggle folders.
+- **Requirements Met**:
+  - Implemented two-panel layout (`FolderTreePanel`, `BookmarkListPanel`). **Core interaction (selecting folder displays contents) is now functional after parser fixes.**
+  - Basic drag-and-drop for reordering within panels using `@dnd-kit/core`.
+  - Right-click deletion implemented.
+  - Expand/collapse implemented for folder tree panel.
+  - Used Tailwind CSS for styling.
+- **Requirements Pending/Needs Refinement**:
+  - Drag-and-drop between panels (item to folder, folder reordering).
+  - Keyboard navigation.
+- **Success Criteria**: Core UI implemented. Drag-and-drop interaction needs refinement.
 
 #### 3.1.3 Effective Search
 - **Description**: Fast search by title, URL, and notes.
-- **Requirements**:
-  - Add `SearchBar` for real-time filtering of `BookmarkNode` tree.
-  - Search case-insensitively with Tailwind CSS styling (clear button, focus states).
-- **Success Criteria**: Query filters bookmarks instantly.
+- **Requirements Met**:
+  - Added `SearchBar` component.
+  - Implemented real-time filtering logic (`filterBookmarkTree`) updating both folder tree (dimming non-matches) and content panel.
+  - Search is case-insensitive and includes a clear button.
+- **Success Criteria**: Functionality implemented. Performance with large datasets needs validation.
 
 #### 3.1.4 Duplicate Identification
 - **Description**: Identify and optionally remove duplicates (same URL).
-- **Requirements**:
-  - Add `findDuplicates` in `bookmarkParser.ts` to detect matching URLs.
-  - Highlight duplicates in `BookmarkTree` (e.g., red badge).
-  - Optional “Remove Duplicates” button with confirmation dialog.
-- **Success Criteria**: Duplicates are highlighted; removal updates tree correctly.
+- **Requirements Met**:
+  - Added `findDuplicateUrls` in `treeUtils.ts`.
+  - Highlighted duplicates in the content panel (`BookmarkListPanel` via `BookmarkItem`).
+  - Added "Remove Duplicates" button with confirmation dialog (`App.tsx`).
+- **Success Criteria**: Functionality implemented and verified.
 
 #### 3.1.5 Bookmark Export
 - **Description**: Export bookmark tree as Chrome/Edge-compatible HTML.
-- **Requirements**:
-  - Add `generateBookmarkHtml` in `bookmarkParser.ts` for HTML output.
-  - Trigger download in `App.tsx` (`Blob`, `zenmark_bookmarks.html`).
-- **Success Criteria**: Exported file is importable by Chrome/Edge without errors.
+- **Requirements Met**:
+  - Added `generateBookmarkHtml` in `bookmarkParser.ts`.
+  - Triggered download in `App.tsx` using `Blob` and named `zenmark_bookmarks.html`.
+- **Success Criteria**: Functionality implemented. Compatibility testing needed.
 
 ### 3.2 Non-Functional Requirements
-- **Performance**: Parse/display 10,000 bookmarks in <2 seconds; drag-and-drop responds in <100ms.
-- **Compatibility**: Supports Chrome/Edge bookmark HTML format (May 2025).
-- **Persistence**: Bookmark data persists in IndexedDB across browser sessions.
-- **Accessibility**: Basic WCAG 2.1 compliance (keyboard navigation).
-- **Responsive**: Desktop (min 1024px), tablet (min 768px).
+- **Performance**: Parse/display target (<2s for 10k) needs validation. Drag-and-drop target (<100ms) needs validation and refinement. **Initial virtualization implemented.**
+- **Compatibility**: Supports Chrome/Edge bookmark HTML format (basic validation done).
+- **Persistence**: Bookmark data persists in IndexedDB across browser sessions (verified).
+- **Accessibility**: Basic keyboard navigation **not yet implemented**.
+- **Responsive**: Basic layout exists, further testing needed for tablet responsiveness.
 
 ## 4. Technical Requirements
 - **Frontend**: React 18.2.0, TypeScript 5.2.2.
@@ -84,66 +94,78 @@ The app’s limited functionality (in-memory storage, no persistence, basic UX) 
 - **Styling**: Tailwind CSS 3.4.4.
 - **Drag-and-Drop**: `@dnd-kit/core` 6.1.0.
 - **Parsing**: `FileReader`, `DOMParser`.
-- **Storage**: IndexedDB for client-side persistence.
-- **State**: React `useState` for in-memory session data.
-- **Dependencies**: Current `package.json`.
-- **Project Structure**:
+- **Storage**: IndexedDB (`idb` library).
+- **State**: React `useState`, `useCallback`, `useMemo`.
+- **Virtualization**: `react-window` (^1.8.x).
+- **Dependencies**: Updated `package.json`.
+- **Project Structure** (Updated conceptual structure):
   ```
   zenmark-web/
-  ├── public/
-  │   └── favicon.ico
+  ├── ... (public, config files)
   ├── src/
   │   ├── components/
   │   │   ├── FileUpload.tsx
-  │   │   ├── BookmarkTree.tsx
-  │   │   └── SearchBar.tsx
+  │   │   ├── SearchBar.tsx
+  │   │   ├── FolderTreePanel.tsx  // New
+  │   │   ├── BookmarkListPanel.tsx // New
+  │   │   └── BookmarkItem.tsx      // Reused item renderer
   │   ├── utils/
   │   │   ├── bookmarkParser.ts
-  │   │   └── bookmarkStorage.ts
+  │   │   ├── bookmarkStorage.ts
+  │   │   └── treeUtils.ts
   │   ├── types/
-  │   │   └── bookmark.ts
+  │   │   └── bookmark.ts (contains BookmarkNode, FlattenedBookmarkNode)
   │   ├── styles/
-  │   │   └── tailwind.css
+  │   │   └── ...
   │   ├── App.tsx
   │   └── main.tsx
-  ├── index.html
-  ├── package.json
-  ├── tsconfig.json
-  ├── tsconfig.app.json
-  ├── tsconfig.node.json
-  ├── vite.config.ts
-  ├── tailwind.config.js
-  └── postcss.config.js
+  └── ... (package.json, etc.)
   ```
 
 ## 5. User Interface Requirements
-- **Layout**: Centered card with “Zenmark” header, `SearchBar`, `BookmarkTree`, export button.
+- **Layout**: Updated to a **two-panel layout**. Left panel shows a virtualized folder tree. Right panel shows a virtualized list of the selected folder's contents (bookmarks only). Top bar contains header, file upload, search, and action buttons (Export, Remove Duplicates).
 - **Components**:
-  - **FileUpload**: Styled input for HTML upload (existing).
-  - **BookmarkTree**: Tree with drag-and-drop, expand/collapse, right-click deletion.
-  - **SearchBar**: Input with real-time filtering, clear button.
-- **Styling**: Tailwind CSS (gray background, white card, green buttons).
-- **Responsive**: Stack vertically on tablet; adjust tree indentation.
+  - **FileUpload**: (Unchanged).
+  - **SearchBar**: (Unchanged).
+  - **FolderTreePanel**: Displays virtualized, hierarchical folder list with expand/collapse, selection highlighting. Dims non-matching folders during search.
+  - **BookmarkListPanel**: Displays virtualized list of bookmarks for the selected folder. Handles duplicate highlighting and right-click deletion.
+  - **BookmarkItem**: Reusable component for rendering individual bookmarks/folders (used by BookmarkListPanel, potentially adaptable for FolderTreePanel row if needed).
+- **Styling**: (Largely unchanged, adapted for two panels).
+- **Responsive**: Needs review for two-panel layout on smaller screens.
 
 ## 6. Development Phases
-### Phase 1: MVP Core (2-3 Weeks)
-- **Tasks**:
+### Phase 1: MVP Core (Completed)
+- **Tasks Completed**:
   - Update `BookmarkNode` with `tags` and `notes`.
-  - Add IndexedDB in `bookmarkStorage.ts` for persistence.
-  - Cap uploads at 10,000 bookmarks in `bookmarkParser.ts`.
-  - Implement `BookmarkTree` (drag-and-drop, expand/collapse, right-click).
-  - Add `SearchBar` for title/URL/notes search.
-  - Implement duplicate identification, optional removal.
-  - Add `generateBookmarkHtml` and export download.
-- **Deliverables**: Interactive bookmark manager with persistent storage.
+  - Add IndexedDB persistence.
+  - Cap uploads at 10,000 bookmarks.
+  - Implement core tree interactions (expand/collapse, right-click delete).
+  - Add Search bar and filtering logic.
+  - Implement duplicate identification and removal.
+  - Add bookmark export.
+- **Deliverables**: Interactive bookmark manager with persistent storage, search, duplicate handling, and export. Initial two-panel UI implemented.
 
-### Phase 2: Enhancements (2-3 Weeks)
+### Phase 2: Enhancements (In Progress)
 - **Tasks**:
-  - Optimize for edge cases (e.g., 10,000 bookmarks with deep nesting).
-  - Add bookmark saving (URL input form).
-- **Deliverables**: Polished, scalable app.
+  - **Performance Optimizations**:
+    - [Partially Addressed] Optimize rendering for large datasets using virtualization (`react-window`).
+    - [Completed] Implement debouncing for IndexedDB saves on frequent updates (e.g., DND).
+    - [Completed] Implement debouncing for search input filtering.
+    - [Pending] Validate performance against 10k bookmark target.
+  - **Drag-and-Drop Refinement**:
+    - [Pending] Implement reliable DND *within* the right panel (reordering items).
+    - [Pending] Implement DND *between* panels (dragging items/folders from right panel onto folders in left panel).
+    - [Pending] Implement DND *within* the left panel (reordering folders).
+  - **Add Bookmark Saving**:
+    - [Pending] Add UI (e.g., a form or button) to manually add a new bookmark (URL and title).
+    - [Pending] Implement logic to add the new bookmark to the tree structure and persist it.
+  - **UI Polish**:
+    - [Pending] Add UI for viewing/editing tags and notes.
+    - [Pending] Improve responsive layout for tablet/smaller screens.
+    - [Pending] Implement basic keyboard navigation for accessibility.
+- **Deliverables**: Polished, performant app with refined DND and bookmark adding capabilities.
 
-### Phase 3: Advanced Features (4+ Weeks)
+### Phase 3: Advanced Features (Future)
 - **Tasks**:
   - Add cloud syncing (backend).
   - Implement dead link detection (API).
@@ -159,11 +181,13 @@ The app’s limited functionality (in-memory storage, no persistence, basic UX) 
 
 ## 8. Risks and Mitigations
 - **Risk**: IndexedDB performance with 10,000 bookmarks.
-  - **Mitigation**: Optimize storage with efficient serialization, test with large datasets.
-- **Risk**: Drag-and-drop complexity.
-  - **Mitigation**: Use `@dnd-kit/core` examples, test incrementally.
-- **Risk**: Browser compatibility issues.
-  - **Mitigation**: Test with Chrome and Edge bookmark HTML files.
+  - **Mitigation**: Virtualization implemented. **Debouncing saves implemented.** Test with large datasets.
+- **Risk**: Drag-and-drop complexity (especially with virtualization and two panels).
+  - **Mitigation**: Incremental implementation planned. Test thoroughly. Refer to `@dnd-kit` documentation for virtualization strategies if needed.
+- **Risk**: Browser compatibility issues (HTML format, IndexedDB).
+  - **Mitigation**: Test with Chrome and Edge bookmark HTML files. Test IndexedDB in target browsers.
+- **Risk**: Virtualization library integration issues (`react-window`).
+  - **Mitigation**: Addressed initial integration. Monitor for edge cases or performance issues.
 
 ## 9. Future Enhancements
 - Cloud syncing with Firebase.
@@ -172,6 +196,6 @@ The app’s limited functionality (in-memory storage, no persistence, basic UX) 
 - AI-driven categorization.
 
 ## 10. Appendix
-- **Tech Stack**: React, TypeScript, Vite, Tailwind CSS, `@dnd-kit/core`, IndexedDB.
+- **Tech Stack**: React, TypeScript, Vite, Tailwind CSS, `@dnd-kit/core`, IndexedDB, **`react-window`**.
 - **References**: User trends (massive collections, poor UX, scalability needs).
 - **Stakeholders**: Developer (4DVibes), Chrome/Edge users.
