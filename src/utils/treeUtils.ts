@@ -482,3 +482,81 @@ export const countNodesByType = (nodes: BookmarkNode[]): { total: number, folder
     nodes.forEach(traverse);
     return counts;
 };
+
+/** Recursively removes nodes with the given IDs from the tree */
+export function removeNodesByIds(tree: BookmarkNode[], idsToRemove: Set<string>): BookmarkNode[] {
+    return tree.filter(node => !idsToRemove.has(node.id));
+}
+
+/**
+ * Recursively adds a new node to the tree under the specified parent ID.
+ * Ensures immutability by returning new arrays/objects where changes occur.
+ *
+ * @param tree The current bookmark tree.
+ * @param parentId The ID of the parent node to add the new node under.
+ * @param newNode The bookmark node to add.
+ * @returns A new tree array with the node added, or null if the parentId was not found.
+ */
+export function addNodeToTree(
+    tree: BookmarkNode[],
+    parentId: string,
+    newNode: BookmarkNode
+): BookmarkNode[] | null {
+    let found = false;
+
+    function recurse(nodes: BookmarkNode[]): BookmarkNode[] {
+        return nodes.map(node => {
+            if (node.id === parentId) {
+                found = true;
+                // Ensure parent has children array initialized
+                const children = node.children ? [...node.children] : [];
+                children.push(newNode); // Add the new node
+                return {
+                    ...node,
+                    children: children
+                };
+            }
+            // If node has children, recurse into them
+            if (node.children && node.children.length > 0) {
+                const updatedChildren = recurse(node.children);
+                // If children were updated (found flag set during nested call),
+                // return a new node object with the updated children
+                if (found && updatedChildren !== node.children) {
+                    return { ...node, children: updatedChildren };
+                }
+            }
+            // Return the original node if no changes were made to it or its descendants
+            return node;
+        });
+    }
+
+    const newTree = recurse(tree);
+
+    // Return the new tree if the parent was found, otherwise null
+    return found ? newTree : null;
+}
+
+/** Creates a map of URL -> Array of BookmarkNode IDs */
+export function findDuplicateUrls(tree: BookmarkNode[]): Map<string, string[]> {
+    const urlMap = new Map<string, string[]>();
+
+    const traverse = (nodes: BookmarkNode[]) => {
+        for (const node of nodes) {
+            if (node.url) {
+                const urlKey = node.url;
+                const existingIds = urlMap.get(urlKey);
+                if (existingIds) {
+                    existingIds.push(node.id);
+                } else {
+                    urlMap.set(urlKey, [node.id]);
+                }
+            }
+            if (node.children) {
+                traverse(node.children);
+            }
+        }
+    };
+
+    traverse(tree);
+    return urlMap;
+}
