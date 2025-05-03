@@ -1,4 +1,9 @@
 import React, { useMemo, memo } from 'react';
+// Import SortableContext utilities
+import {
+    SortableContext,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 // Assuming we might reuse react-window here too
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
 // Import only BookmarkNode now
@@ -15,6 +20,7 @@ interface BookmarkListPanelProps {
     editingNodeId: string | null;
     handleRenameNode: (nodeId: string, newTitle: string) => void;
     duplicateIds?: Set<string>; // Keep duplicateIds optional or handle appropriately
+    // Reordering is now handled by App.tsx's handleDragEnd
 }
 
 // Data passed to each BookmarkItem row
@@ -39,6 +45,9 @@ const BookmarkListPanel: React.FC<BookmarkListPanelProps> = ({
 }) => {
     console.log('BookmarkListPanel rendering with:', { bookmarkNodes });
 
+    // Prepare IDs for SortableContext
+    const bookmarkIds = useMemo(() => bookmarkNodes.map(node => node.id), [bookmarkNodes]);
+
     const itemData = useMemo<BookmarkItemData>(() => ({
         nodes: bookmarkNodes,
         onDeleteNode,
@@ -58,28 +67,40 @@ const BookmarkListPanel: React.FC<BookmarkListPanelProps> = ({
         <BookmarkItem
             style={style} // Pass style for positioning
             node={data.nodes[index]}
+            depth={0}
+            isExpanded={false}
             onDeleteNode={data.onDeleteNode}
             onEditNode={data.onEditNode}
             onAddBookmark={data.onAddBookmark} // Pass down handler
             editingNodeId={data.editingNodeId} // Pass down state
             handleRenameNode={data.handleRenameNode} // Pass down handler
-            isDuplicate={data.duplicateIds?.has(data.nodes[index].id)}
+            isDuplicate={!!data.duplicateIds?.has(data.nodes[index].id)}
         />
     ));
     Row.displayName = 'BookmarkRow'; // Add display name for DevTools
 
+    // Wrap the list with SortableContext, but NOT DndContext
     return (
-        <div className="h-full bg-white">
-            <FixedSizeList
-                height={600} // Adjust or make dynamic
-                itemCount={bookmarkNodes.length}
-                itemSize={40} // Adjust based on BookmarkItem height
-                width="100%"
-                itemData={itemData}
-            >
-                {Row}
-            </FixedSizeList>
-        </div>
+        <SortableContext
+            items={bookmarkIds}
+            strategy={verticalListSortingStrategy}
+        >
+            <div className="h-full bg-white">
+                {bookmarkNodes.length === 0 ? (
+                    <div className="p-4 text-gray-500 flex items-center justify-center h-full">No bookmarks in this folder.</div>
+                ) : (
+                    <FixedSizeList
+                        height={600} // Adjust or make dynamic
+                        itemCount={bookmarkNodes.length}
+                        itemSize={40} // Adjust based on BookmarkItem height
+                        width="100%"
+                        itemData={itemData}
+                    >
+                        {Row}
+                    </FixedSizeList>
+                )}
+            </div>
+        </SortableContext>
     );
 };
 

@@ -6,8 +6,11 @@ import {
   KeyboardSensor,
   useSensor,
   useSensors,
-  DragEndEvent
+  DragEndEvent,
+  closestCenter, // Use this collision detection
+  // Remove DragOverlay if not used
 } from '@dnd-kit/core';
+import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import FileUpload from './components/FileUpload';
 import SearchBar from './components/SearchBar';
 import FolderTreePanel from './components/FolderTreePanel';
@@ -54,68 +57,252 @@ const App: React.FC = () => {
   const [nodeCounts, setNodeCounts] = useState<{ total: number, folders: number, bookmarks: number } | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null); // State to track inline editing
 
-  // --- DND Setup ---
+  // Single set of sensors for the main DndContext
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 10,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // Smaller distance might feel better
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }) // Use sortable coordinates
   );
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  // --- Central Drag End Handler --- 
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (!over || !active.data.current) {
-      console.log('Drag cancelled or invalid drop target.');
+    if (!over || active.id === over.id) {
+      console.log(`[App DragEnd] Cancelled: No target or dropped on self (Active: ${active.id}, Over: ${over?.id})`);
       return;
     }
 
-    const activeNode = active.data.current.node as BookmarkNode;
-    const overId = over.id as string;
+    console.log(`[App DragEnd] === Event Start ===`);
+    console.log(`  Active ID: ${active.id}, Over ID: ${over.id}`);
 
-    console.log(`Drag End: Item ${activeNode.id} (${activeNode.title}) dropped over ID: ${overId}`);
+    const activeData = active.data.current;
+    const overData = over.data.current;
 
-    if (active.id === overId) {
-      console.log("Dropped on self, no change.");
+    if (!activeData) {
+      console.error('[App DragEnd] Missing active node data. Bailing out.');
       return;
     }
 
-    setBookmarks((currentBookmarks) => {
-      const nodeToMove = activeNode;
-      const treeWithoutNode = removeNodeById(currentBookmarks, nodeToMove.id);
+    const activeNode = activeData.node as BookmarkNode;
+    const activeType = activeData.type as string;
+    const overNode = overData?.node as BookmarkNode | undefined;
+    const overType = overData?.type as string | undefined;
 
-      let position: 'inside' | 'after' | 'root' = 'after';
-      let finalTargetId: string | null = null;
+    console.log(`  Active Node: ${activeNode?.title} (Type: ${activeType}, Parent: ${activeNode?.parentId})`);
+    console.log(`  Over Node  : ${overNode?.title} (Type: ${overType}, Parent: ${overNode?.parentId}, ID: ${over?.id})`);
+    console.log(`  Selected Folder ID: ${selectedFolderId}`);
 
-      if (overId === ROOT_FOLDER_DROP_ID) {
-        console.log("Dropped onto root target.");
-        position = 'root';
-        finalTargetId = null;
-      } else {
-        finalTargetId = overId;
-        const targetNode = findNodeById(treeWithoutNode, finalTargetId);
+    // Scenario 1: Sorting Bookmarks within BookmarkListPanel
+    if (activeType === 'bookmark' && overType === 'bookmark') {
+      console.log("  Attempting Scenario 1: Sort Bookmarks");
+      if (activeNode.parentId === overNode?.parentId) {
+        const parentId = activeNode.parentId; // This might be undefined for root
+        console.log(`    Parent IDs match: ${parentId ?? 'root'}`);
 
-        if (targetNode?.children) {
-          position = 'inside';
-        } else {
-          position = 'after';
+        // Allow sorting if either:
+        // a) Both items have the same *defined* parentId which matches selectedFolderId
+        // b) Both items have undefined parentId (root) and selectedFolderId is null
+        const isRootSort = parentId === undefined && selectedFolderId === null;
+        const isNestedSort = parentId !== undefined && parentId === selectedFolderId;
+
+        if (!isRootSort && !isNestedSort) {
+          console.warn(`    Sort condition not met. isRootSort=${isRootSort}, isNestedSort=${isNestedSort}. parentId=${parentId}, selectedFolderId=${selectedFolderId}. Ignoring sort.`);
+          return;
         }
 
-        if (position === 'inside' && targetNode && findNodeById([nodeToMove], targetNode.id)) {
-          console.warn("Cannot drop a folder inside itself or its descendants.");
+        console.log(`    Calling handleReorderBookmarks for parent ${parentId ?? 'ROOT'}`);
+        // Pass parentId (which could be undefined -> null conversion needed?) or handle root in handler
+        handleReorderBookmarks(parentId ?? null, active.id as string, over.id as string);
+
+      } else {
+        console.log(`    Parent IDs DON'T match (${activeNode.parentId} vs ${overNode?.parentId}). Ignoring.`);
+      }
+      return;
+    }
+
+    // Scenario 2: Sorting Folders within FolderTreePanel
+    if (activeType === 'folder' && overType === 'folder') {
+      console.log("  Attempting Scenario 2: Sort Folders");
+      console.log(`    Calling handleReorderFolders`);
+      handleReorderFolders(active.id as string, over.id as string);
+      return;
+    }
+
+    // Scenario 3: Moving Bookmark to Folder
+    if (activeType === 'bookmark' && overType === 'folder') {
+      console.log("  Attempting Scenario 3: Move Bookmark to Folder");
+      console.log(`    Moving ${active.id} onto ${over.id}`);
+      setBookmarks((currentBookmarks) => {
+        console.log("    Inside setBookmarks for Move Bookmark -> Folder");
+        const treeWithoutNode = removeNodeById(currentBookmarks, active.id as string);
+        const targetFolder = findNodeById(treeWithoutNode, over.id as string);
+        if (!targetFolder || !targetFolder.children) {
+          console.error("      Target folder not found/invalid."); return currentBookmarks;
+        }
+        const nodeToInsert = { ...activeNode, parentId: over.id as string };
+        console.log("      Inserting node: ", nodeToInsert);
+        return insertNode(treeWithoutNode, over.id as string, nodeToInsert, 'inside');
+      });
+      return;
+    }
+
+    // Scenario 4: Moving Folder (onto another Folder or Root)
+    if (activeType === 'folder' && (overType === 'folder' || over.id === ROOT_FOLDER_DROP_ID)) {
+      console.log("  Attempting Scenario 4: Move Folder");
+      const targetParentId = over.id === ROOT_FOLDER_DROP_ID ? null : over.id as string;
+      console.log(`    Target Parent ID: ${targetParentId ?? 'ROOT'}`);
+      setBookmarks((currentBookmarks) => {
+        console.log("    Inside setBookmarks for Move Folder");
+        const treeWithoutNode = removeNodeById(currentBookmarks, active.id as string);
+        if (targetParentId && findNodeById([activeNode], targetParentId)) {
+          console.warn("      Cannot drop folder inside itself/descendant.");
           return currentBookmarks;
         }
+        const nodeToInsert = { ...activeNode, parentId: targetParentId };
+        const position = targetParentId ? 'inside' : 'root';
+        console.log("      Inserting node: ", nodeToInsert, ` at position: ${position}`);
+        return insertNode(treeWithoutNode, targetParentId, nodeToInsert, position);
+      });
+      return;
+    }
+
+    console.log(`[App DragEnd] === Unhandled Scenario ===`);
+
+  }, [selectedFolderId]);
+
+  // --- Specific Reorder Handlers (called by main handleDragEnd) ---
+
+  const handleReorderFolders = useCallback((activeId: string, overId: string) => {
+    console.log(`[App:handleReorderFolders] Reordering ${activeId} over ${overId}`);
+    setBookmarks(currentBookmarks => {
+      // Function to find parent and perform reorder immutably
+      const findAndReorder = (nodes: BookmarkNode[], parentId: string | undefined): BookmarkNode[] | null => {
+        for (let i = 0; i < nodes.length; i++) {
+          const node = nodes[i];
+          if (node.id === parentId && node.children) { // Found the parent node
+            const oldIndex = node.children.findIndex(child => child.id === activeId);
+            const newIndex = node.children.findIndex(child => child.id === overId);
+            if (oldIndex !== -1 && newIndex !== -1) {
+              console.log(`  Reordering folders in parent ${parentId}: ${oldIndex} -> ${newIndex}`);
+              // Return a *new* parent node with reordered children
+              return [...nodes.slice(0, i),
+              { ...node, children: arrayMove(node.children, oldIndex, newIndex) },
+              ...nodes.slice(i + 1)];
+            }
+            return null; // Indices not found in this parent
+          }
+          // Recurse
+          if (node.children) {
+            const result = findAndReorder(node.children, parentId);
+            if (result !== null) { // Change occurred deeper
+              // Return a *new* copy of current nodes array with the modified child node
+              return [...nodes.slice(0, i),
+              { ...node, children: result },
+              ...nodes.slice(i + 1)];
+            }
+          }
+        }
+        return null; // Parent not found at this level or below
+      };
+
+      const activeNode = findNodeById(currentBookmarks, activeId);
+      const overNode = findNodeById(currentBookmarks, overId);
+      if (!activeNode || !overNode || activeNode.parentId !== overNode.parentId) {
+        console.error("Folder reorder failed: Nodes not found or not siblings.");
+        return currentBookmarks;
+      }
+      const parentId = activeNode.parentId;
+
+      if (parentId === undefined) { // Root level
+        console.log("  Reordering root folders...");
+        const oldIndex = currentBookmarks.findIndex(node => node.id === activeId);
+        const newIndex = currentBookmarks.findIndex(node => node.id === overId);
+        if (oldIndex === -1 || newIndex === -1) {
+          console.error("    Root indices not found!"); return currentBookmarks;
+        }
+        console.log(`    Moving root index ${oldIndex} to ${newIndex}`);
+        return arrayMove(currentBookmarks, oldIndex, newIndex); // arrayMove creates a new array
+      } else { // Nested level
+        console.log(`  Reordering nested folders under parent ${parentId}...`);
+        // This recursive approach is complex for immutability, let's try mapping
+        const reorderRecursiveMap = (nodes: BookmarkNode[]): BookmarkNode[] => {
+          return nodes.map(node => {
+            // If this is the parent, return a new node with reordered children
+            if (node.id === parentId && node.children) {
+              const oldIndex = node.children.findIndex(child => child.id === activeId);
+              const newIndex = node.children.findIndex(child => child.id === overId);
+              if (oldIndex === -1 || newIndex === -1) {
+                console.error(`    Nested indices not found in parent ${parentId}!`);
+                return node; // Return original node if error
+              }
+              console.log(`    Moving nested index ${oldIndex} to ${newIndex}`);
+              return { ...node, children: arrayMove(node.children, oldIndex, newIndex) };
+            }
+            // If node has children, recurse and potentially get new children array
+            if (node.children) {
+              const newChildren = reorderRecursiveMap(node.children);
+              // If children array reference changed, return a new node object
+              if (newChildren !== node.children) {
+                return { ...node, children: newChildren };
+              }
+            }
+            // Otherwise return the original node reference
+            return node;
+          });
+        }
+        const newTree = reorderRecursiveMap(currentBookmarks);
+        // Check if the tree reference actually changed
+        return newTree !== currentBookmarks ? newTree : currentBookmarks;
+      }
+    });
+  }, []);
+
+  const handleReorderBookmarks = useCallback((parentId: string | null, activeId: string, overId: string) => {
+    console.log(`[App:handleReorderBookmarks] Reordering in parent ${parentId ?? 'ROOT'}: move ${activeId} over ${overId}`);
+    setBookmarks(currentBookmarks => {
+      // Handle Root Level Bookmarks
+      if (parentId === null) {
+        console.log("  Reordering root bookmarks...");
+        const oldIndex = currentBookmarks.findIndex(node => node.id === activeId && !node.children);
+        const newIndex = currentBookmarks.findIndex(node => node.id === overId && !node.children);
+        if (oldIndex === -1 || newIndex === -1) {
+          console.error(` Error finding root bookmark indices for ${activeId} or ${overId}`); return currentBookmarks;
+        }
+        console.log(`    Moving root index ${oldIndex} to ${newIndex}`);
+        return arrayMove(currentBookmarks, oldIndex, newIndex); // arrayMove creates new array
       }
 
-      console.log(`Inserting node ${nodeToMove.id} with position: ${position}, targetId: ${finalTargetId}`);
-      const newTree = insertNode(treeWithoutNode, finalTargetId, nodeToMove, position);
-      return newTree;
+      // Handle Nested Bookmarks using map for immutability
+      console.log(`  Reordering nested bookmarks under parent ${parentId}...`);
+      const reorderRecursiveMap = (nodes: BookmarkNode[]): BookmarkNode[] => {
+        return nodes.map(node => {
+          // If this is the parent, return a new node with reordered children
+          if (node.id === parentId && node.children) {
+            const oldIndex = node.children.findIndex(child => child.id === activeId);
+            const newIndex = node.children.findIndex(child => child.id === overId);
+            if (oldIndex === -1 || newIndex === -1) {
+              console.error(`    Error finding bookmark indices in parent ${parentId}`);
+              return node; // Return original node if error
+            }
+            console.log(`    Moving nested index ${oldIndex} to ${newIndex}`);
+            return { ...node, children: arrayMove(node.children, oldIndex, newIndex) };
+          }
+          // If node has children, recurse and potentially get new children array
+          if (node.children) {
+            const newChildren = reorderRecursiveMap(node.children);
+            // If children array reference changed, return a new node object
+            if (newChildren !== node.children) {
+              return { ...node, children: newChildren };
+            }
+          }
+          // Otherwise return the original node reference
+          return node;
+        });
+      }
+      const newTree = reorderRecursiveMap(currentBookmarks);
+      return newTree !== currentBookmarks ? newTree : currentBookmarks;
     });
-  };
-  // --- End DND Setup ---
+  }, []);
 
   // --- Context Menu Handlers ---
   const handleEditNode = useCallback((nodeId: string) => {
@@ -567,6 +754,7 @@ const App: React.FC = () => {
                   onAddBookmark={handleAddBookmark} // Pass add bookmark handler (context might differ)
                   editingNodeId={editingNodeId} // Pass editing state
                   handleRenameNode={handleRenameNode} // Pass rename handler
+                  duplicateIds={duplicateIds}
                 />
               </div>
             </div>

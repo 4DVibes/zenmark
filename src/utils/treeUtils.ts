@@ -32,22 +32,49 @@ export const findNodeById = (nodes: BookmarkNode[], id: string, _depth = 0): Boo
     return null;
 };
 
-/** Helper to recursively remove a node */
-const removeNodeRecursive = (nodes: BookmarkNode[], id: string): BookmarkNode[] => {
-    return nodes
-        .filter(node => node.id !== id) // Filter out the node at the current level
-        .map(node => {
-            // If the node has children, recursively attempt removal in its children
+/** Helper to recursively remove a node ensuring immutability */
+const removeNodeRecursive = (nodes: BookmarkNode[], id: string): { tree: BookmarkNode[], removed: boolean } => {
+    let treeCopy: BookmarkNode[] | null = null;
+    let removed = false;
+    const resultNodes: BookmarkNode[] = [];
+
+    for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+
+        if (node.id === id) {
+            // Node found at this level, mark as removed and *don't* add it to resultNodes
+            if (treeCopy === null) treeCopy = nodes.slice(0, i); // Copy preceding nodes if needed
+            removed = true;
+            // Skip adding this node
+        } else {
+            let processedNode = node; // Start with the original node reference
+            // If node has children, try removing recursively
             if (node.children) {
-                const newChildren = removeNodeRecursive(node.children, id);
-                // If children array changed, return a new node object
-                if (newChildren !== node.children) {
-                    return { ...node, children: newChildren };
+                const result = removeNodeRecursive(node.children, id);
+                // If removal happened deeper, update the current node immutably
+                if (result.removed) {
+                    processedNode = { ...node, children: result.tree }; // Create new node object
+                    removed = true; // Mark that a removal happened (in children)
                 }
             }
-            // If no children or children didn't change, return the original node
-            return node;
-        });
+            // Add the processed node (either original or updated) to the results
+            if (treeCopy !== null) {
+                // If we started copying, continue adding to the copy
+                treeCopy.push(processedNode);
+            } else if (processedNode !== node) {
+                // If the node was updated (due to child removal) and we haven't copied yet,
+                // copy preceding nodes and add the updated node.
+                treeCopy = [...nodes.slice(0, i), processedNode];
+            } else {
+                // If node wasn't removed or modified, add to result (no copy needed yet)
+                resultNodes.push(node);
+            }
+        }
+    }
+
+    // If treeCopy was created, it holds the result. Otherwise, resultNodes holds it (if no changes)
+    // The 'removed' flag indicates if any change occurred anywhere in the subtree.
+    return { tree: treeCopy ?? resultNodes, removed };
 };
 
 /**
@@ -58,56 +85,68 @@ const removeNodeRecursive = (nodes: BookmarkNode[], id: string): BookmarkNode[] 
  * @returns A new array of nodes with the specified node removed.
  */
 export const removeNodeById = (nodes: BookmarkNode[], id: string): BookmarkNode[] => {
-    return removeNodeRecursive(nodes, id);
+    console.log(`[removeNodeById] Attempting to remove: ${id}`);
+    const result = removeNodeRecursive(nodes, id);
+    if (!result.removed) {
+        console.warn(`[removeNodeById] Node with ID "${id}" not found for removal.`);
+    }
+    // Check if the reference changed when it should have
+    if (result.removed && result.tree === nodes) {
+        console.error(`[removeNodeById] IMMUTABILITY ERROR: Node was removed but array reference did not change!`);
+    }
+    if (!result.removed && result.tree !== nodes) {
+        console.error(`[removeNodeById] IMMUTABILITY ERROR: Node was not removed but array reference changed!`);
+    }
+    console.log(`[removeNodeById] Removal result: removed=${result.removed}, ref changed=${result.tree !== nodes}`);
+    return result.tree; // Always return the resulting tree (new or original reference)
 };
 
-/** Helper to recursively insert a node */
+/** Helper to recursively insert a node ensuring immutability */
 const insertNodeRecursive = (
     nodes: BookmarkNode[],
     targetId: string,
     newNode: BookmarkNode,
     position: 'before' | 'after' | 'inside'
-): BookmarkNode[] => {
-    const newNodes = [...nodes]; // Create a mutable copy for this level
-    let inserted = false;
+): { tree: BookmarkNode[], inserted: boolean } => {
 
-    for (let i = 0; i < newNodes.length; i++) {
-        const node = newNodes[i];
+    for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
 
+        // --- Found Target at Current Level --- 
         if (node.id === targetId) {
+            const treeCopy = [...nodes]; // Create copy now
             if (position === 'inside') {
-                // Ensure target is a folder (or treat as such)
-                const targetNode = { ...node }; // Clone target node
-                targetNode.children = targetNode.children ? [...targetNode.children, newNode] : [newNode];
-                newNodes[i] = targetNode; // Replace node with updated one
-                inserted = true;
+                // Ensure it's a folder; create children array if needed
+                // Clone children if they exist, then add newNode
+                const newChildren = node.children ? [...node.children, newNode] : [newNode];
+                treeCopy[i] = { ...node, children: newChildren }; // Create new node object with new children array
             } else if (position === 'before') {
-                newNodes.splice(i, 0, newNode); // Insert before target
-                inserted = true;
-            } else { // position === 'after'
-                newNodes.splice(i + 1, 0, newNode); // Insert after target
-                inserted = true;
+                treeCopy.splice(i, 0, newNode);
+            } else { // 'after'
+                treeCopy.splice(i + 1, 0, newNode);
             }
-            break; // Exit loop once inserted at this level
+            // Return the modified copy and indicate success
+            return { tree: treeCopy, inserted: true };
         }
 
-        // If not inserted and node has children, try inserting recursively
-        if (!inserted && node.children) {
-            const updatedChildren = insertNodeRecursive(node.children, targetId, newNode, position);
-            // If the children array changed, update the node immutably
-            if (updatedChildren !== node.children) {
-                newNodes[i] = { ...node, children: updatedChildren };
-                inserted = true; // Mark as inserted (within a child)
-                break; // Exit loop, insertion happened deeper
+        // --- Check Children Recursively --- 
+        if (node.children) {
+            const result = insertNodeRecursive(node.children, targetId, newNode, position);
+
+            // If insertion happened deeper, we MUST create a new copy of the current level array
+            // and update the specific child node immutably.
+            if (result.inserted) {
+                const treeCopy = [...nodes]; // Create copy of current level
+                treeCopy[i] = { ...node, children: result.tree }; // Create new parent node object
+                // Return the modified copy and indicate success
+                return { tree: treeCopy, inserted: true };
             }
         }
     }
 
-    // If inserted is true, return the modified array (or the result of the recursive call)
-    // If inserted is false, it means targetId wasn't found at this level or below, return original (reference)
-    return inserted ? newNodes : nodes;
+    // Target not found at this level or below, return original tree and false
+    return { tree: nodes, inserted: false };
 };
-
 
 /**
  * Inserts a node into a bookmark tree immutably.
@@ -121,16 +160,33 @@ const insertNodeRecursive = (
  */
 export const insertNode = (
     nodes: BookmarkNode[],
-    targetId: string | null, // Allow null targetId for root insertion
+    targetId: string | null,
     newNode: BookmarkNode,
-    position: 'before' | 'after' | 'inside' | 'root' // Add 'root' position
+    position: 'before' | 'after' | 'inside' | 'root'
 ): BookmarkNode[] => {
+    console.log(`[insertNode] Attempting insert relative to ${targetId ?? 'root'} at position ${position}`);
     if (position === 'root' || targetId === null) {
-        // Insert at the beginning of the root level for simplicity
-        // Could add logic for specific root index if needed
-        return [newNode, ...nodes];
+        console.log(`[insertNode] Inserting at root:`, newNode);
+        const newTree = [newNode, ...nodes];
+        console.log(`[insertNode] Root insert result: ref changed=${newTree !== nodes}`);
+        return newTree;
     }
-    return insertNodeRecursive(nodes, targetId, newNode, position);
+
+    // Target ID must be a string here for recursive call
+    const result = insertNodeRecursive(nodes, targetId, newNode, position as 'before' | 'after' | 'inside');
+
+    if (!result.inserted) {
+        console.warn(`[insertNode] Target ID "${targetId}" not found for insertion. Node not inserted.`);
+    }
+    // Check if the reference changed when it should have
+    if (result.inserted && result.tree === nodes) {
+        console.error(`[insertNode] IMMUTABILITY ERROR: Node was inserted but array reference did not change!`);
+    }
+    if (!result.inserted && result.tree !== nodes) {
+        console.error(`[insertNode] IMMUTABILITY ERROR: Node was not inserted but array reference changed!`);
+    }
+    console.log(`[insertNode] Recursive insert result: inserted=${result.inserted}, ref changed=${result.tree !== nodes}`);
+    return result.tree; // Return the resulting tree (modified or original)
 };
 
 
