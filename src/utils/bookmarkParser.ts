@@ -87,19 +87,17 @@ const parseDl = (dlElement: HTMLDListElement, counter: { count: number }, parent
             continue;
         }
 
-
         // It IS a DT element
-        const dt = element as HTMLDListElement; // Cast needed as we've ensured it's DT
+        const dtElement = element as HTMLDListElement; // Use dtElement for clarity
         if (counter.count >= MAX_BOOKMARKS) {
             throw new BookmarkLimitExceededError(`Bookmark limit of ${MAX_BOOKMARKS} exceeded during parsing.`);
         }
 
-        const anchor = dt.querySelector<HTMLAnchorElement>(':scope > A');
-        const header = dt.querySelector<HTMLHeadingElement>(':scope > H3');
+        const anchor = dtElement.querySelector<HTMLAnchorElement>(':scope > A');
+        const header = dtElement.querySelector<HTMLHeadingElement>(':scope > H3');
         const nodeId = `${Date.now()}-${Math.random().toString(16).slice(2)}-${idCounter++}`;
         counter.count++;
         let newNode: BookmarkNode | null = null;
-        let processedNestedDl = false; // Flag to indicate if we processed a nested DL
 
         if (anchor) {
             // Bookmark Link
@@ -110,37 +108,28 @@ const parseDl = (dlElement: HTMLDListElement, counter: { count: number }, parent
             const folderTitle = header.textContent?.trim() || 'Untitled Folder';
             console.log(`  [parseDl] Processing Folder DT: \"${folderTitle}\" at index ${i}`);
 
-            // Check the *next* element in the children array for a <DL>
-            const nextElement = children[i + 1];
+            // --- Look for a DL child WITHIN the current DT element --- START ---
             let nestedDl: HTMLDListElement | null = null;
 
-            if (nextElement && nextElement instanceof HTMLDListElement && nextElement.nodeName === 'DL') {
-                nestedDl = nextElement;
-                console.log(`    [parseDl] Found subsequent DL element for \"${folderTitle}\" at index ${i + 1}. Parsing recursively.`);
-                processedNestedDl = true; // Mark that we found and will process this DL
+            // Use querySelector to find a direct child DL
+            const potentialDl = dtElement.querySelector<HTMLDListElement>(':scope > dl');
+
+            if (potentialDl) {
+                nestedDl = potentialDl;
+                console.log(`    [parseDl] Found child DL within DT for \"${folderTitle}\". Parsing recursively.`);
             } else {
-                console.log(`    [parseDl] No subsequent DL element found immediately after folder \"${folderTitle}\" at index ${i}. Creating empty folder.`);
-                if (nextElement) {
-                    console.log(`    [parseDl] Element at index ${i + 1} is: ${nextElement.nodeName}`);
-                } else {
-                    console.log(`    [parseDl] No element at index ${i + 1}.`);
-                }
+                console.warn(`    [parseDl] No child DL found within DT for folder \"${folderTitle}\". Creating empty folder.`);
+                console.warn(`      DT OuterHTML (trimmed):`, dtElement.outerHTML?.substring(0, 200));
             }
+            // --- Look for a DL child WITHIN the current DT element --- END ---
 
             // Recursively parse the nested DL if found, otherwise children is empty
             const childNodes = nestedDl ? parseDl(nestedDl, counter, nodeId) : [];
             newNode = { id: nodeId, title: folderTitle, children: childNodes, parentId: parentId };
 
-            // If we processed a nested DL, we need to advance the loop counter
-            // an extra step to skip over it in the *next* iteration.
-            if (processedNestedDl) {
-                console.log(`    [parseDl] Advancing loop index to ${i + 1} to skip processed DL for \"${folderTitle}\".`);
-                i++; // Advance i NOW, so the next iteration starts after the DL
-            }
-
         } else {
             // Unrecognized DT structure (neither anchor nor header found within DT)
-            console.warn(`  [parseDl] Skipping unrecognized DT structure at index ${i}:`, dt.innerHTML);
+            console.warn(`  [parseDl] Skipping unrecognized DT structure at index ${i}:`, dtElement.innerHTML);
             counter.count--; // Decrement count as we didn't create a node
         }
 

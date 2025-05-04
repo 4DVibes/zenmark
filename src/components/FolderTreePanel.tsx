@@ -196,7 +196,7 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
                         onClick={(e) => e.stopPropagation()}
                     />
                 ) : (
-                    <span className="flex-grow truncate cursor-pointer" onClick={handleRowClick}>
+                    <span className="flex-grow truncate cursor-pointer text-left" onClick={handleRowClick}>
                         {bookmarkNode.title}
                     </span>
                 )}

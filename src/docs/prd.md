@@ -145,35 +145,35 @@ This PRD outlines the completed MVP and ongoing development phases.
   - Add bookmark export.
 - **Deliverables**: Interactive bookmark manager with persistent storage, search, duplicate handling, and export. Initial two-panel UI implemented.
 
-### Phase 2: Enhancements (In Progress)
-- **Tasks**:
-  - **Performance Optimizations**:
-    - [Partially Addressed] Optimize rendering for large datasets using virtualization (`react-window`).
-    - [Completed] Implement debouncing for IndexedDB saves on frequent updates (e.g., DND).
-    - [Completed] Implement debouncing for search input filtering.
-    - [Deferred to Testing] Validate performance against 10k bookmark target.
-  - **Drag-and-Drop Refinement**:
-    - [Completed] Implement reliable DND *within* the right panel (reordering items).
-    - [Completed] Implement DND *between* panels (dragging items/folders from right panel onto folders in left panel).
-    - [Completed - Basic] Implement DND *within* the left panel (reordering folders among siblings).
-  - **Add Bookmark Saving**:
-    - [Pending] Add UI (e.g., a form or button) to manually add a new bookmark (URL and title).
-    - [Pending] Implement logic to add the new bookmark to the tree structure and persist it.
-  - **UI Polish**:
-    - **[Pending] Replace `window.prompt` with modal dialogs for Add/Edit actions.**
-    - [Pending] Add UI for viewing/editing tags and notes.
-    - [Pending] Improve responsive layout for tablet/smaller screens.
-    - [Pending] Implement basic keyboard navigation for accessibility.
-- **Deliverables**: Polished, performant app with refined DND and bookmark adding capabilities.
+### Phase 2: Core Functionality & Polish (Current)
 
-### Phase 3: Advanced Features (Future)
-- **Tasks**:
-  - **Refine Folder DND**: Enhance drag-and-drop within the folder tree (left panel) to visually distinguish and handle dropping *onto* a folder (reparenting) versus dropping *between* folders (reordering siblings).
-  - Add cloud syncing (backend).
-  - Implement dead link detection (API).
-  - Integrate archiving (e.g., Internet Archive).
-  - Add password-protected folders.
-- **Deliverables**: Fully featured app.
+*   **DONE:** ~~DND Refinements:~~ Address limitations from Phase 1.
+    *   ✅ Reordering folders within the left panel.
+    *   ✅ Reordering bookmarks within the right panel.
+    *   ✅ Moving bookmarks between panels (right list -> left folder).
+    *   ✅ Moving folders between levels (including root).
+*   **DONE:** ~~Bookmark Saving:~~ Persist bookmark data locally (e.g., IndexedDB).
+*   **DONE:** ~~UI Polish: Modals~~ Replace `window.prompt` for Add/Edit with proper modals.
+*   **UI Polish:** Improve inline editing UI/UX.
+*   **UI Polish:** Responsiveness (ensure usability on smaller screens).
+*   **DEFERRED:** ~~Performance Validation:~~ Test with large bookmark files (e.g., 10k+ items).
+
+### Phase 3: Advanced Features
+
+*   **DONE:** ~~Search/Filtering:~~ Implement efficient search across titles, URLs, tags, notes.
+*   Duplicate Detection/Resolution.
+*   Bulk Actions (e.g., delete multiple items).
+*   More Robust Error Handling.
+
+### Future Enhancements
+
+*   **NEW:** Tags/Notes UI: Add/edit/view tags and notes associated with bookmarks.
+*   **NEW:** Keyboard Navigation: Review/enhance for accessibility.
+*   More sophisticated DND (e.g., dropping *between* folders vs *onto* folders in the left panel).
+*   Settings Panel (e.g., configure storage, UI options).
+*   Multi-select.
+*   Integration with browser extensions/APIs (if feasible).
+*   Cloud sync options.
 
 ## 7. Success Metrics
 - **Engagement**: 80% of users manage bookmarks in <5 minutes.

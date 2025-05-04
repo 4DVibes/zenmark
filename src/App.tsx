@@ -48,6 +48,9 @@ import BookmarkContextMenu from './components/BookmarkContextMenu';
 import BookmarkItem from './components/BookmarkItem';
 import { v4 as uuidv4 } from 'uuid';
 import { debounce } from './utils/debounce';
+import Modal from './components/Modal';
+import AddFolderModalContent from './components/AddFolderModalContent';
+import AddBookmarkModalContent from './components/AddBookmarkModalContent';
 
 const SAVE_DEBOUNCE_DELAY = 500;
 const SEARCH_DEBOUNCE_DELAY = 300;
@@ -79,6 +82,10 @@ const App: React.FC = () => {
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [activeDragNode, setActiveDragNode] = useState<BookmarkNode | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
+  const [isAddBookmarkModalOpen, setIsAddBookmarkModalOpen] = useState(false);
+  const [modalTargetParentId, setModalTargetParentId] = useState<string | null>(null);
 
   const debouncedSave = useMemo(() => debounce(saveBookmarks, SAVE_DEBOUNCE_DELAY), []);
 
@@ -329,41 +336,52 @@ const App: React.FC = () => {
     setSearchTerm('');
   }, []);
 
-  const handleAddFolder = useCallback((parentId: string | null) => {
-    const folderName = window.prompt("Enter the name for the new folder:", "New Folder");
-    if (!folderName || folderName.trim() === "") return;
+  const handleOpenAddFolderModal = useCallback((parentId: string | null) => {
+    console.log(`[App] Opening Add Folder modal for parent: ${parentId ?? 'root'}`);
+    setModalTargetParentId(parentId);
+    setIsAddFolderModalOpen(true);
+  }, []);
+
+  const handleOpenAddBookmarkModal = useCallback((parentId: string | null) => {
+    console.log(`[App] Opening Add Bookmark modal for parent: ${parentId ?? 'root'}`);
+    setModalTargetParentId(parentId);
+    setIsAddBookmarkModalOpen(true);
+  }, []);
+
+  const handleSaveFolder = useCallback((folderName: string) => {
+    console.log(`[App] Saving new folder "${folderName}" for parent: ${modalTargetParentId ?? 'root'}`);
+    if (!folderName) return;
 
     const newNode: BookmarkNode = {
-      id: uuidv4 ? uuidv4() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      title: folderName.trim(),
+      id: uuidv4(),
+      title: folderName,
       children: [],
-      parentId: parentId
+      parentId: modalTargetParentId
     };
-    console.log(`[App] Adding new folder "${newNode.title}" inside parent: ${parentId ?? 'root'}`);
-    handleTreeUpdate(currentBookmarks => insertNode(currentBookmarks, parentId, newNode, 'inside'));
-  }, [handleTreeUpdate]);
+    handleTreeUpdate(currentBookmarks => insertNode(currentBookmarks, modalTargetParentId, newNode, 'inside'));
+    setIsAddFolderModalOpen(false); // Close modal
+  }, [modalTargetParentId, handleTreeUpdate]);
 
-  const handleAddBookmark = useCallback((parentId: string | null) => {
-    const title = window.prompt("Enter the bookmark title:", "New Bookmark");
-    if (!title || title.trim() === "") return;
-    const url = window.prompt("Enter the bookmark URL:");
-    if (!url || url.trim() === "") return;
-    try { new URL(url.trim()); } catch (_) { alert("Invalid URL."); return; }
+  const handleSaveBookmark = useCallback((title: string, url: string) => {
+    console.log(`[App] Saving new bookmark "${title}" for parent: ${modalTargetParentId ?? 'root'}`);
+    if (!title || !url) return;
 
     const newBookmark: BookmarkNode = {
-      id: uuidv4 ? uuidv4() : `${Date.now()}-${Math.random().toString(16).slice(2)}-bookmark`,
-      title: title.trim(),
-      url: url.trim(),
-      parentId: parentId,
+      id: uuidv4(),
+      title: title,
+      url: url,
+      parentId: modalTargetParentId,
       children: undefined,
     };
-    console.log(`[App] Adding new bookmark "${newBookmark.title}" inside parent: ${parentId ?? 'root'}`);
     handleTreeUpdate(currentBookmarks => {
-      const position = parentId ? 'inside' : 'root';
-      return insertNode(currentBookmarks, parentId, newBookmark, position);
+      const position = modalTargetParentId ? 'inside' : 'root';
+      return insertNode(currentBookmarks, modalTargetParentId, newBookmark, position);
     });
-    setTimeout(() => setEditingNodeId(newBookmark.id), 0);
-  }, [handleTreeUpdate]);
+    setIsAddBookmarkModalOpen(false); // Close modal
+  }, [modalTargetParentId, handleTreeUpdate]);
+
+  const handleAddFolder = handleOpenAddFolderModal;
+  const handleAddBookmark = handleOpenAddBookmarkModal;
 
   const handleDeleteNode = useCallback((nodeId: string) => {
     console.log(`Attempting to delete node: ${nodeId}`);
@@ -388,11 +406,12 @@ const App: React.FC = () => {
   }, [handleTreeUpdate, selectedFolderId]);
 
   const handleRenameNode = useCallback((nodeId: string, newTitle: string) => {
-    console.log(`[App:handleRenameNode] Renaming node ${nodeId} to "${newTitle}"`);
+    console.log(`[App:handleRenameNode] Renaming node ${nodeId} to \"${newTitle}\"`);
     handleTreeUpdate(currentBookmarks => {
       const renameRecursiveMap = (nodes: BookmarkNode[]): BookmarkNode[] => {
         return nodes.map(node => {
           if (node.id === nodeId) {
+            console.log(`  Found node ${nodeId}, updating title.`);
             return { ...node, title: newTitle };
           }
           if (node.children) {
@@ -404,7 +423,11 @@ const App: React.FC = () => {
           return node;
         });
       };
-      return renameRecursiveMap(currentBookmarks);
+      const updatedBookmarks = renameRecursiveMap(currentBookmarks);
+      if (updatedBookmarks === currentBookmarks) {
+        console.warn(`  Node ${nodeId} not found for renaming.`);
+      }
+      return updatedBookmarks;
     });
     setEditingNodeId(null);
   }, [handleTreeUpdate]);
@@ -461,25 +484,62 @@ const App: React.FC = () => {
     }
   };
 
-  const handleFileUpload = async (file: File) => {
-    if (!file) return;
-    setLoading(true);
-    setError(null);
-    console.log(`[App] handleUpload: Starting upload for ${file.name}`);
-    try {
-      setSearchTerm('');
-      setSelectedFolderId(ROOT_FOLDER_DROP_ID);
-      console.log(`[App] handleUpload: Parsing file ${file.name}...`);
-      const parsedBookmarks = await parseBookmarkFile(file);
-      console.log(`[App] handleUpload: Received ${parsedBookmarks.length} top-level nodes from parser.`);
-      handleTreeUpdate(parsedBookmarks);
-      console.log('[App] handleUpload: Upload finished.');
-    } catch (err: any) {
-      console.error('[App] handleUpload: Error during upload/parse:', err);
-      setError(`Upload failed: ${err.message || 'Unknown error'}`);
-      handleTreeUpdate([]);
-    } finally {
-      setLoading(false);
+  const handleFileUpload = async (file: File | null) => {
+    if (file) {
+      console.log(`[App] handleFileUpload: Starting processing for ${file.name}`);
+      setLoading(true);
+      setError(null);
+      setUploadedFileName(file.name);
+      // Clear existing data before processing the new file
+      try {
+        await clearBookmarks(); // Clear from storage
+        console.log('[App] handleFileUpload: Cleared data from IndexedDB.');
+        handleTreeUpdate([]); // Clear state via handler
+        setSelectedFolderId(ROOT_FOLDER_DROP_ID);
+        console.log('[App] handleFileUpload: Cleared tree state and reset selected folder.');
+      } catch (clearError) {
+        console.error('[App] handleFileUpload: Error clearing data before upload:', clearError);
+        setError('Failed to clear previous data before loading.');
+        setLoading(false);
+        return; // Stop if clearing failed
+      }
+
+      try {
+        // const htmlContent = await file.text(); // Don't read content here
+        // console.log('[App] handleFileUpload: Read file content.');
+
+        // Pass the File object directly to the parser
+        const tree = await parseBookmarkFile(file);
+
+        console.log('[App] handleFileUpload: Parsed bookmark tree:', tree ? 'Success' : 'Failed', tree ? `(${tree.length} top-level nodes)` : '');
+        // Add detailed log for debugging parsing issues
+        if (tree) console.log('[App] handleFileUpload: Parsed structure (sample):', JSON.stringify(tree.slice(0, 2), null, 2));
+
+        if (tree && tree.length > 0) {
+          console.log('[App] handleFileUpload: Updating tree state via handleTreeUpdate...');
+          handleTreeUpdate(tree);
+          const firstNodeId = tree.find(node => node.children)?.id || tree[0]?.id || ROOT_FOLDER_DROP_ID;
+          setSelectedFolderId(firstNodeId);
+          console.log('[App] handleFileUpload: Tree state updated. Selected folder ID set to:', firstNodeId);
+        } else if (tree && tree.length === 0) {
+          console.warn('[App] handleFileUpload: Parsing successful but resulted in an empty tree.');
+          // Kept state cleared from above
+          setError('Bookmarks file appears to be empty or contains no valid bookmarks.');
+        } else {
+          console.error('[App] handleFileUpload: Parsing failed, parseBookmarkFile returned null or undefined');
+          setError('Failed to parse bookmarks file. Check file format.');
+          handleTreeUpdate([]); // Ensure state is empty on failure
+          setUploadedFileName(null);
+        }
+      } catch (error: any) {
+        console.error('[App] handleFileUpload: Error processing file:', error);
+        setError(`Error processing file: ${error.message}`);
+        handleTreeUpdate([]); // Ensure state is empty on error
+        setUploadedFileName(null);
+      } finally {
+        setLoading(false);
+        console.log('[App] handleFileUpload: Finished processing.');
+      }
     }
   };
 
@@ -544,6 +604,7 @@ const App: React.FC = () => {
               onUpload={handleFileUpload}
               onClearData={handleClearData}
               hasData={bookmarks.length > 0}
+              uploadedFileName={uploadedFileName}
               nodeCounts={nodeCounts}
             />
             {error && <p className="error-message text-red-600">Error: {error}</p>}
@@ -570,8 +631,8 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-grow min-h-0">
-            <div className="w-1/3 max-w-xs flex-shrink-0 h-full">
+          <div className="flex flex-col md:flex-row flex-grow min-h-0">
+            <div className="w-full md:w-1/3 md:max-w-xs flex-shrink-0 h-full mb-4 md:mb-0 md:mr-4">
               <FolderTreePanel
                 folderTree={folderTree}
                 selectedFolderId={selectedFolderId}
@@ -586,7 +647,7 @@ const App: React.FC = () => {
               />
             </div>
 
-            <div className="flex-grow h-full min-w-0">
+            <div className="w-full md:flex-grow h-full min-w-0">
               <div className="flex-grow overflow-auto">
                 <BookmarkListPanel
                   bookmarkNodes={rightPanelNodes}
@@ -633,6 +694,65 @@ const App: React.FC = () => {
           )
         ) : null}
       </DragOverlay>
+
+      <Modal
+        isOpen={isAddFolderModalOpen}
+        onClose={() => setIsAddFolderModalOpen(false)}
+        title="Add New Folder"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setIsAddFolderModalOpen(false)}
+              className="rounded bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="add-folder-form"
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            >
+              Save Folder
+            </button>
+          </>
+        }
+      >
+        <AddFolderModalContent
+          onSubmit={handleSaveFolder}
+          onCancel={() => setIsAddFolderModalOpen(false)}
+        />
+      </Modal>
+
+      <Modal
+        isOpen={isAddBookmarkModalOpen}
+        onClose={() => setIsAddBookmarkModalOpen(false)}
+        title="Add New Bookmark"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setIsAddBookmarkModalOpen(false)}
+              className="rounded bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="add-bookmark-form"
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            >
+              Save Bookmark
+            </button>
+          </>
+        }
+      >
+        <AddBookmarkModalContent
+          onSubmit={handleSaveBookmark}
+          onCancel={() => setIsAddBookmarkModalOpen(false)}
+        />
+      </Modal>
+
     </DndContext>
   );
 };
