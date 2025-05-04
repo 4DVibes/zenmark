@@ -596,26 +596,32 @@ const App: React.FC = () => {
       collisionDetection={rectIntersection}
     >
       <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
-        <div className="bg-white shadow-md rounded-lg p-6 max-w-6xl w-full h-[80vh] flex flex-col">
-          <h1 className="text-2xl font-bold text-center mb-4 flex-shrink-0">Zenmark</h1>
+        <div className="bg-white shadow-md rounded-lg p-4 max-w-7xl w-full h-[85vh] flex flex-col">
+          <div className="flex items-center space-x-3 mb-4 pb-4 border-b border-gray-200 flex-shrink-0">
+            <span className="text-4xl">🧘</span>
+            <h1 className="text-2xl font-bold text-gray-800">Zenmark</h1>
+          </div>
 
-          <div className="mb-4 flex space-x-4 flex-shrink-0">
-            <FileUpload
-              onUpload={handleFileUpload}
-              onClearData={handleClearData}
-              hasData={bookmarks.length > 0}
-              uploadedFileName={uploadedFileName}
-              nodeCounts={nodeCounts}
-            />
-            {error && <p className="error-message text-red-600">Error: {error}</p>}
-            <div className="flex-grow">
-              <SearchBar query={searchTerm} onQueryChange={handleSearch} />
+          <div className="flex flex-col space-y-4 lg:flex-row lg:space-y-0 lg:justify-between lg:items-center mb-4 pb-4 border-b border-gray-200 flex-shrink-0">
+            <div className="flex flex-col space-y-2 lg:flex-row lg:space-y-0 lg:items-center lg:space-x-4">
+              <FileUpload
+                onUpload={handleFileUpload}
+                onClearData={handleClearData}
+                hasData={bookmarks.length > 0}
+                uploadedFileName={uploadedFileName}
+                nodeCounts={nodeCounts}
+              />
             </div>
-            <div className="flex items-center space-x-2">
+
+            {/* Right side: Actions (Export, Duplicates) */}
+            {/* Responsive: Stack vertical, align end default. Row, center, spaced on lg */}
+            <div className="flex flex-col items-end space-y-2 lg:flex-row lg:items-center lg:space-y-0 lg:space-x-2">
+              {error && <p className="error-message text-red-600 text-sm text-right lg:text-left lg:mr-4 w-full lg:w-auto">Error: {error}</p>} { /* Adjusted error alignment/width */}
               {duplicateIds.size > 0 && (
                 <button
                   onClick={handleRemoveDuplicates}
-                  className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline text-sm"
+                  // Responsive: Full width default, auto on lg
+                  className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline text-sm w-full lg:w-auto"
                   title={`Remove all ${duplicateIds.size} duplicate bookmark entries`}
                 >
                   Remove Duplicates ({duplicateIds.size})
@@ -624,15 +630,16 @@ const App: React.FC = () => {
               <button
                 onClick={handleExport}
                 disabled={bookmarks.length === 0}
-                className={`bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline text-sm ${bookmarks.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                // Responsive: Full width default, auto on lg
+                className={`bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline text-sm w-full lg:w-auto ${bookmarks.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 Export Bookmarks
               </button>
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row flex-grow min-h-0">
-            <div className="w-full md:w-1/3 md:max-w-xs flex-shrink-0 h-full mb-4 md:mb-0 md:mr-4">
+          <div className="flex flex-col lg:flex-row flex-grow min-h-0">
+            <div className="w-full lg:w-1/3 lg:max-w-xs flex-shrink-0 h-full mb-4 lg:mb-0 lg:mr-4">
               <FolderTreePanel
                 folderTree={folderTree}
                 selectedFolderId={selectedFolderId}
@@ -647,7 +654,13 @@ const App: React.FC = () => {
               />
             </div>
 
-            <div className="w-full md:flex-grow h-full min-w-0">
+            <div className="w-full lg:flex-grow h-full min-w-0 flex flex-col">
+              <div className="flex justify-between items-center pb-2 mb-2 border-b border-gray-200 flex-shrink-0">
+                <h2 className="text-lg font-semibold text-gray-700">Bookmarks</h2>
+                <div className="w-full max-w-xs">
+                  <SearchBar query={searchTerm} onQueryChange={handleSearch} />
+                </div>
+              </div>
               <div className="flex-grow overflow-auto">
                 <BookmarkListPanel
                   bookmarkNodes={rightPanelNodes}

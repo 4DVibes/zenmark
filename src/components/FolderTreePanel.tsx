@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
+import AutoSizer from 'react-virtualized-auto-sizer';
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useContextMenu } from 'react-contexify';
@@ -32,7 +33,7 @@ interface FolderTreePanelProps {
     // onReorderFolders: (activeId: string, overId: string) => void; 
 }
 
-const ROW_HEIGHT = 32; // Height for folder rows
+const ROW_HEIGHT = 40; // Increased height
 const INDENT_WIDTH = 20; // Pixels per indent level
 
 // Data passed to each row item via FixedSizeList's itemData
@@ -179,8 +180,8 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
     return (
         <div ref={setNodeRef} style={finalStyle} {...attributes} {...(isEditing ? {} : listeners)} onContextMenu={handleContextMenu}>
             <div className={rowClassName}>
-                {/* Folder Icon & Click Handler */}
-                <span className="mr-1 w-5 h-5 flex items-center justify-center flex-shrink-0 cursor-pointer" onClick={handleRowClick}>
+                {/* Folder Icon & Click Handler - Increased Size */}
+                <span className="mr-2 w-6 h-6 flex items-center justify-center flex-shrink-0 cursor-pointer text-lg" onClick={handleRowClick}>
                     {isExpanded ? '📂' : '📁'}
                 </span>
                 {/* Title or Input */}
@@ -324,35 +325,37 @@ const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
     return (
         <div
             ref={setRootDroppableRef}
-            className={`h-full overflow-y-auto bg-gray-50 border border-gray-300 rounded flex flex-col ${isOverRoot ? 'bg-blue-50' : ''}`}
+            className={`h-full overflow-hidden bg-gray-50 border border-gray-300 rounded flex flex-col ${isOverRoot ? 'bg-blue-50' : ''}`}
             onContextMenu={handleBackgroundContextMenu}
         >
-            <div className="p-2 border-b border-gray-300 text-sm font-medium bg-gray-100">
+            <div className="p-2 border-b border-gray-300 text-lg font-semibold bg-gray-100 text-left flex-shrink-0">
                 Folders
             </div>
-            {/* Fix: Wrap FixedSizeList in SortableContext */}
-            <SortableContext items={folderIds} strategy={verticalListSortingStrategy}>
-                <div className="flex-grow p-1"> {/* Padding for list items */}
-                    {folderTree.length === 0 ? (
-                        <div className="p-4 text-gray-500 text-center text-sm">No folders found.</div>
-                    ) : (
-                        <FixedSizeList
-                            height={600} // Adjust height or make dynamic
-                            itemCount={flattenedNodes.length}
-                            itemSize={ROW_HEIGHT}
-                            width="100%"
-                            itemData={itemData}
-                            itemKey={getItemKey}
-                            className="focus:outline-none" // Remove focus ring from list itself
-                        >
-                            {FolderRow}
-                        </FixedSizeList>
+            <div className="flex-grow p-1 overflow-hidden">
+                <AutoSizer>
+                    {({ height, width }) => (
+                        <SortableContext items={folderIds} strategy={verticalListSortingStrategy}>
+                            {folderTree.length === 0 ? (
+                                <div className="p-4 text-gray-500 text-center text-sm">No folders found.</div>
+                            ) : (
+                                <FixedSizeList
+                                    height={height}
+                                    itemCount={flattenedNodes.length}
+                                    itemSize={ROW_HEIGHT}
+                                    width={width}
+                                    itemData={itemData}
+                                    itemKey={getItemKey}
+                                    className="focus:outline-none list-container"
+                                >
+                                    {FolderRow}
+                                </FixedSizeList>
+                            )}
+                        </SortableContext>
                     )}
-                </div>
-            </SortableContext>
-            {/* Drop indicator for root (optional) */}
+                </AutoSizer>
+            </div>
             {isOverRoot && (
-                <div className="p-2 text-center text-xs text-blue-600 border-t border-dashed border-blue-400">
+                <div className="p-2 text-center text-xs text-blue-600 border-t border-dashed border-blue-400 flex-shrink-0">
                     Drop here to move to root
                 </div>
             )}
