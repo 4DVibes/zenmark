@@ -288,39 +288,6 @@ export const filterBookmarkTree = (nodes: BookmarkNode[], query: string): Filter
 };
 
 /**
- * Traverses the bookmark tree and identifies nodes with duplicate URLs.
- * Only considers nodes with a defined `url` property (i.e., not folders).
- *
- * @param nodes The array of nodes to scan.
- * @returns A Set containing the IDs of all nodes that have duplicate URLs.
- */
-export const findDuplicateUrls = (nodes: BookmarkNode[]): Set<string> => {
-    const urlMap = new Map<string, string[]>(); // Map<url, list_of_node_ids>
-    const duplicateIdSet = new Set<string>();
-
-    const traverse = (nodesToScan: BookmarkNode[]) => {
-        for (const node of nodesToScan) {
-            if (node.url) {
-                const urlKey = node.url;
-                const existingIds = urlMap.get(urlKey);
-                if (existingIds) {
-                    existingIds.push(node.id);
-                    existingIds.forEach(id => duplicateIdSet.add(id));
-                } else {
-                    urlMap.set(urlKey, [node.id]);
-                }
-            }
-            if (node.children) {
-                traverse(node.children);
-            }
-        }
-    };
-
-    traverse(nodes);
-    return duplicateIdSet;
-};
-
-/**
  * Escapes HTML characters in a string.
  * @param {string} str - The string to escape.
  * @returns {string} The escaped string.
@@ -543,13 +510,9 @@ export function findDuplicateUrls(tree: BookmarkNode[]): Map<string, string[]> {
     const traverse = (nodes: BookmarkNode[]) => {
         for (const node of nodes) {
             if (node.url) {
-                const urlKey = node.url;
-                const existingIds = urlMap.get(urlKey);
-                if (existingIds) {
-                    existingIds.push(node.id);
-                } else {
-                    urlMap.set(urlKey, [node.id]);
-                }
+                const ids = urlMap.get(node.url) || [];
+                ids.push(node.id);
+                urlMap.set(node.url, ids);
             }
             if (node.children) {
                 traverse(node.children);
@@ -558,5 +521,15 @@ export function findDuplicateUrls(tree: BookmarkNode[]): Map<string, string[]> {
     };
 
     traverse(tree);
-    return urlMap;
+
+    // Filter the map to keep only entries with more than one ID (duplicates)
+    const duplicateMap = new Map<string, string[]>();
+    urlMap.forEach((ids, url) => {
+        if (ids.length > 1) {
+            duplicateMap.set(url, ids);
+        }
+    });
+
+    console.log('[findDuplicateUrls] Duplicate URL Map:', duplicateMap);
+    return duplicateMap;
 }
