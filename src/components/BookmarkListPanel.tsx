@@ -1,14 +1,17 @@
 import React, { useMemo, memo } from 'react';
-// Assuming we might reuse react-window here too
-import { FixedSizeList, ListChildComponentProps } from 'react-window';
-// Fix: Add imports for SortableContext
+// Fix: Remove duplicate imports
 import {
     SortableContext,
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-// Import only BookmarkNode now
+// Assuming we might reuse react-window here too
+import { FixedSizeList, ListChildComponentProps } from 'react-window';
+// Remove duplicate imports
+// import {
+//     SortableContext,
+//     verticalListSortingStrategy,
+// } from '@dnd-kit/sortable';
 import { BookmarkNode } from '../types/bookmark';
-// Import the actual BookmarkItem component we used before
 import BookmarkItem from './BookmarkItem';
 
 interface BookmarkListPanelProps {
@@ -20,6 +23,7 @@ interface BookmarkListPanelProps {
     editingNodeId: string | null;
     handleRenameNode: (nodeId: string, newTitle: string) => void;
     duplicateIds?: Set<string>; // Keep duplicateIds optional or handle appropriately
+    // Reordering is now handled by App.tsx's handleDragEnd
 }
 
 // Data passed to each BookmarkItem row
@@ -44,8 +48,8 @@ const BookmarkListPanel: React.FC<BookmarkListPanelProps> = ({
 }) => {
     console.log('BookmarkListPanel rendering with:', { bookmarkNodes });
 
-    // Fix: Prepare IDs for SortableContext
-    const bookmarkIds = useMemo(() => (bookmarkNodes || []).map(node => node.id), [bookmarkNodes]);
+    // Prepare IDs for SortableContext
+    const bookmarkIds = useMemo(() => bookmarkNodes.map(node => node.id), [bookmarkNodes]);
 
     const itemData = useMemo<BookmarkItemData>(() => ({
         nodes: bookmarkNodes,
@@ -66,8 +70,8 @@ const BookmarkListPanel: React.FC<BookmarkListPanelProps> = ({
         <BookmarkItem
             style={style} // Pass style for positioning
             node={data.nodes[index]}
-            // Fix: Pass depth (always 0 for this flat list)
             depth={0}
+            isExpanded={false}
             onDeleteNode={data.onDeleteNode}
             onEditNode={data.onEditNode}
             onAddBookmark={data.onAddBookmark} // Pass down handler
@@ -78,13 +82,15 @@ const BookmarkListPanel: React.FC<BookmarkListPanelProps> = ({
     ));
     Row.displayName = 'BookmarkRow'; // Add display name for DevTools
 
+    // Wrap the list with SortableContext, but NOT DndContext
     return (
-        // Fix: Wrap FixedSizeList in SortableContext
-        <SortableContext items={bookmarkIds} strategy={verticalListSortingStrategy}>
+        <SortableContext
+            items={bookmarkIds}
+            strategy={verticalListSortingStrategy}
+        >
             <div className="h-full bg-white">
-                {/* No change needed for the empty state message */}
                 {bookmarkNodes.length === 0 ? (
-                    <div className="p-4 text-gray-500">Select a folder or upload bookmarks.</div>
+                    <div className="p-4 text-gray-500 flex items-center justify-center h-full">No bookmarks in this folder.</div>
                 ) : (
                     <FixedSizeList
                         height={600} // Adjust or make dynamic
@@ -92,8 +98,6 @@ const BookmarkListPanel: React.FC<BookmarkListPanelProps> = ({
                         itemSize={40} // Adjust based on BookmarkItem height
                         width="100%"
                         itemData={itemData}
-                        // Add itemKey for react-window optimization
-                        itemKey={(index, data) => data.nodes[index].id}
                     >
                         {Row}
                     </FixedSizeList>

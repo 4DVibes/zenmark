@@ -1,18 +1,18 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
-import { useDroppable } from '@dnd-kit/core'; // Import useDroppable
+import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useContextMenu } from 'react-contexify';
-import { FOLDER_MENU_ID } from '../App'; // Import the menu ID
+import { FOLDER_MENU_ID } from '../App';
 import { BookmarkNode, FlattenedBookmarkNode } from '../types/bookmark';
-import { flattenBookmarkTree } from '../utils/treeUtils'; // Import the flattening utility
+import { flattenBookmarkTree } from '../utils/treeUtils';
 import {
     SortableContext,
     useSortable,
     verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 
-// Define ID for the root drop target
+// Define ID for the root drop target (Still useful for context menu/adding)
 export const ROOT_FOLDER_DROP_ID = '__ROOT__';
 
 interface FolderTreePanelProps {
@@ -28,6 +28,8 @@ interface FolderTreePanelProps {
     onAddBookmark: (parentId: string | null) => void;
     editingNodeId: string | null; // ID of the node currently being edited
     handleRenameNode: (nodeId: string, newTitle: string) => void; // Handler to finish renaming
+    // Remove onReorderFolders as it's handled by App.tsx now
+    // onReorderFolders: (activeId: string, overId: string) => void; 
 }
 
 const ROW_HEIGHT = 32; // Height for folder rows
@@ -49,29 +51,7 @@ interface RowData {
     handleRenameNode: (nodeId: string, newTitle: string) => void;
 }
 
-// Internal component to render a single folder row
-interface FolderRowProps {
-    data: {
-        items: FlattenedBookmarkNode[];
-        selectedFolderId: string | null;
-        onSelectFolder: (folderId: string | null) => void;
-        expandedIds: Set<string>;
-        toggleExpand: (folderId: string) => void;
-        searchQuery?: string;
-        matchingFolderIds?: Set<string>;
-        // Context Menu Handlers passed down
-        onEditNode: (nodeId: string) => void;
-        onDeleteNode: (nodeId: string) => void;
-        onAddFolder: (parentId: string | null) => void;
-        onAddBookmark: (parentId: string | null) => void;
-        editingNodeId: string | null;
-        handleRenameNode: (nodeId: string, newTitle: string) => void;
-    };
-    index: number;
-    style: React.CSSProperties;
-}
-
-// Memoized Row Component for react-window
+// Internal component to render a single folder row (Reverting to useDraggable/useDroppable)
 const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>) => {
     const {
         nodes,
@@ -164,7 +144,7 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
         toggleExpand(bookmarkNode.id);
     };
 
-    // Fix: Use useSortable hook instead of useDraggable/useDroppable
+    // Use useSortable hook from HEAD
     const {
         attributes,
         listeners,
@@ -175,51 +155,31 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
         isOver
     } = useSortable({ id: bookmarkNode.id, data: { node: bookmarkNode, type: 'folder' } });
 
-    // Fix: Droppable functionality is now handled by SortableContext and App's handleDragEnd
-    // const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({ ... });
-
     const dragStyle = {
         transform: CSS.Transform.toString(transform),
         transition,
         zIndex: isDragging ? 10 : undefined,
         opacity: isDragging ? 0.5 : 1,
         cursor: isDragging ? 'grabbing' : 'grab',
-        // Optional: Add other styles for dragging appearance
     };
 
-    // Fix: combinedRef only needs setNodeRef from useSortable
-    // const combinedRef = (instance: HTMLDivElement | null) => {
-    //     setDraggableNodeRef(instance);
-    //     setDroppableNodeRef(instance);
-    // };
-
-    // Combine base style, indentation, and drag style
     const finalStyle = {
-        ...style, // Base style from react-window
-        paddingLeft: `${node.depth * INDENT_WIDTH + 8}px`, // Indentation
-        ...dragStyle // Apply drag styles
+        ...style,
+        paddingLeft: `${node.depth * INDENT_WIDTH + 8}px`,
+        ...dragStyle
     };
-
-    // Skip rendering the root node placeholder - This logic might need adjustment
-    // if flattenBookmarkTree returns the root differently now.
-    // if (node.id === ROOT_FOLDER_DROP_ID) {
-    //     return null;
-    // }
 
     // Dim the folder if searching and it's not a match
     const rowClassName = `flex items-center h-full px-2 py-1 border-b border-gray-200 
         ${isSelected ? 'bg-blue-100' : 'hover:bg-gray-100'}
         ${isDimmed ? 'opacity-50' : ''}
-        ${isOver ? 'bg-blue-200 border-blue-400 border-2' : ''} // Highlight when compatible item is over
+        ${isOver ? 'bg-blue-200 border-blue-400 border-2' : ''}
     `;
 
     return (
-        // Fix: Use setNodeRef directly
         <div ref={setNodeRef} style={finalStyle} {...attributes} {...(isEditing ? {} : listeners)} onContextMenu={handleContextMenu}>
-            <div
-                className={rowClassName}
-            >
-                {/* Folder Icon */}
+            <div className={rowClassName}>
+                {/* Folder Icon & Click Handler */}
                 <span className="mr-1 w-5 h-5 flex items-center justify-center flex-shrink-0 cursor-pointer" onClick={handleRowClick}>
                     {isExpanded ? '📂' : '📁'}
                 </span>
@@ -246,6 +206,7 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
 });
 FolderRow.displayName = 'FolderRow'; // Add display name
 
+// Main Panel Component
 const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
     folderTree,
     selectedFolderId,
@@ -257,7 +218,8 @@ const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
     onAddFolder,
     onAddBookmark,
     editingNodeId,
-    handleRenameNode
+    handleRenameNode,
+    // Removed onReorderFolders
 }) => {
     const [localExpandedIds, setLocalExpandedIds] = useState<Set<string>>(new Set());
     const isSearching = !!searchQuery && searchQuery.length > 0;
@@ -265,10 +227,7 @@ const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
     // Flatten the tree for rendering in the list
     const flattenedNodes = useMemo(() => {
         console.log("[FolderTreePanel] Recalculating flattenedNodes...");
-        // TODO: Check if flattenBookmarkTree needs expandedIds in this version
-        // Assuming it does for now, based on previous attempts
         const nodes = flattenBookmarkTree(folderTree, localExpandedIds);
-        // Fix: Add Log to check the order
         console.log("[FolderTreePanel] Flattened node IDs: ", nodes.map(n => n.id));
         return nodes;
     }, [folderTree, localExpandedIds]);
@@ -383,7 +342,6 @@ const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
                             itemSize={ROW_HEIGHT}
                             width="100%"
                             itemData={itemData}
-                            // Fix: Pass itemKey prop
                             itemKey={getItemKey}
                             className="focus:outline-none" // Remove focus ring from list itself
                         >

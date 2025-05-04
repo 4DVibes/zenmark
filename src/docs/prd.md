@@ -151,11 +151,11 @@ This PRD outlines the completed MVP and ongoing development phases.
     - [Partially Addressed] Optimize rendering for large datasets using virtualization (`react-window`).
     - [Completed] Implement debouncing for IndexedDB saves on frequent updates (e.g., DND).
     - [Completed] Implement debouncing for search input filtering.
-    - [Pending] Validate performance against 10k bookmark target.
+    - [Deferred to Testing] Validate performance against 10k bookmark target.
   - **Drag-and-Drop Refinement**:
-    - [Pending] Implement reliable DND *within* the right panel (reordering items).
-    - [Pending] Implement DND *between* panels (dragging items/folders from right panel onto folders in left panel).
-    - [Pending] Implement DND *within* the left panel (reordering folders).
+    - [Completed] Implement reliable DND *within* the right panel (reordering items).
+    - [Completed] Implement DND *between* panels (dragging items/folders from right panel onto folders in left panel).
+    - [Completed - Basic] Implement DND *within* the left panel (reordering folders among siblings).
   - **Add Bookmark Saving**:
     - [Pending] Add UI (e.g., a form or button) to manually add a new bookmark (URL and title).
     - [Pending] Implement logic to add the new bookmark to the tree structure and persist it.
@@ -168,6 +168,7 @@ This PRD outlines the completed MVP and ongoing development phases.
 
 ### Phase 3: Advanced Features (Future)
 - **Tasks**:
+  - **Refine Folder DND**: Enhance drag-and-drop within the folder tree (left panel) to visually distinguish and handle dropping *onto* a folder (reparenting) versus dropping *between* folders (reordering siblings).
   - Add cloud syncing (backend).
   - Implement dead link detection (API).
   - Integrate archiving (e.g., Internet Archive).

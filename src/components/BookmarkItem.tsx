@@ -36,7 +36,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = memo(
     }) => {
         const isFolder = !!node.children;
 
-        // --- DND Setup --- 
+        // --- DND Setup (Using useSortable) --- 
         const {
             attributes,
             listeners,
@@ -130,6 +130,15 @@ const BookmarkItem: React.FC<BookmarkItemProps> = memo(
         };
         const divClassName = `flex items-center p-1 rounded hover:bg-gray-100 cursor-grab ${isDuplicate ? 'border border-red-300 bg-red-50' : ''}`;
         // --- End Styling ---
+
+        // Apply transform and transition for sorting animation
+        const sortableStyle = {
+            transform: CSS.Translate.toString(transform),
+            transition,
+            zIndex: isDragging ? 10 : undefined,
+            opacity: isDragging ? 0.5 : undefined,
+            cursor: isDragging ? 'grabbing' : 'grab',
+        };
 
         // --- Return JSX --- 
         return (
