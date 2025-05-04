@@ -1,11 +1,16 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
-import { useDroppable, useDraggable } from '@dnd-kit/core'; // Import useDroppable and useDraggable
+import { useDroppable } from '@dnd-kit/core'; // Import useDroppable
 import { CSS } from '@dnd-kit/utilities';
 import { useContextMenu } from 'react-contexify';
 import { FOLDER_MENU_ID } from '../App'; // Import the menu ID
 import { BookmarkNode, FlattenedBookmarkNode } from '../types/bookmark';
 import { flattenBookmarkTree } from '../utils/treeUtils'; // Import the flattening utility
+import {
+    SortableContext,
+    useSortable,
+    verticalListSortingStrategy
+} from '@dnd-kit/sortable';
 
 // Define ID for the root drop target
 export const ROOT_FOLDER_DROP_ID = '__ROOT__';
@@ -159,56 +164,60 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
         toggleExpand(bookmarkNode.id);
     };
 
-    // Draggable setup
-    const { attributes, listeners, setNodeRef: setDraggableNodeRef, transform, isDragging } = useDraggable({
-        id: bookmarkNode.id,
-        data: { node: bookmarkNode, type: 'folder' },
-    });
+    // Fix: Use useSortable hook instead of useDraggable/useDroppable
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+        isOver
+    } = useSortable({ id: bookmarkNode.id, data: { node: bookmarkNode, type: 'folder' } });
 
-    // Droppable setup (for dropping items *onto* this folder)
-    const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({
-        id: bookmarkNode.id,
-        data: { accepts: ['bookmark', 'folder'] }
-    });
+    // Fix: Droppable functionality is now handled by SortableContext and App's handleDragEnd
+    // const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({ ... });
 
-    const dragStyle = transform ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        zIndex: 10, // Ensure dragged item is on top
+    const dragStyle = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 10 : undefined,
         opacity: isDragging ? 0.5 : 1,
-        cursor: 'grabbing',
-        boxShadow: '0 4px 8px rgba(0,0,0,0.2)', // Add shadow while dragging
-        backgroundColor: 'lightblue', // Highlight while dragging
-    } : {};
-
-    const combinedRef = (instance: HTMLDivElement | null) => {
-        setDraggableNodeRef(instance);
-        setDroppableNodeRef(instance);
+        cursor: isDragging ? 'grabbing' : 'grab',
+        // Optional: Add other styles for dragging appearance
     };
+
+    // Fix: combinedRef only needs setNodeRef from useSortable
+    // const combinedRef = (instance: HTMLDivElement | null) => {
+    //     setDraggableNodeRef(instance);
+    //     setDroppableNodeRef(instance);
+    // };
 
     // Combine base style, indentation, and drag style
     const finalStyle = {
         ...style, // Base style from react-window
-        paddingLeft: `${node.depth * 16 + 8}px`, // Indentation
-        ...dragStyle // Drag styles override or add to base/indentation
+        paddingLeft: `${node.depth * INDENT_WIDTH + 8}px`, // Indentation
+        ...dragStyle // Apply drag styles
     };
 
-    // Skip rendering the root node placeholder
-    if (node.id === ROOT_FOLDER_DROP_ID) {
-        return null;
-    }
-
-    const indentStyle = { paddingLeft: `${node.depth * INDENT_WIDTH}px` };
+    // Skip rendering the root node placeholder - This logic might need adjustment
+    // if flattenBookmarkTree returns the root differently now.
+    // if (node.id === ROOT_FOLDER_DROP_ID) {
+    //     return null;
+    // }
 
     // Dim the folder if searching and it's not a match
-    const rowClassName = `flex items-center p-1 cursor-pointer rounded text-sm truncate 
-        ${isSelected ? 'bg-blue-100 font-bold' : 'hover:bg-gray-100'}
-        ${isDimmed ? 'text-gray-400 opacity-70' : ''}
+    const rowClassName = `flex items-center h-full px-2 py-1 border-b border-gray-200 
+        ${isSelected ? 'bg-blue-100' : 'hover:bg-gray-100'}
+        ${isDimmed ? 'opacity-50' : ''}
+        ${isOver ? 'bg-blue-200 border-blue-400 border-2' : ''} // Highlight when compatible item is over
     `;
 
     return (
-        <div ref={combinedRef} style={finalStyle} {...(isEditing ? {} : listeners)} {...attributes} onContextMenu={handleContextMenu}>
+        // Fix: Use setNodeRef directly
+        <div ref={setNodeRef} style={finalStyle} {...attributes} {...(isEditing ? {} : listeners)} onContextMenu={handleContextMenu}>
             <div
-                className={`flex items-center h-full px-2 py-1 border-b border-gray-200 ${isSelected ? 'bg-blue-100' : 'hover:bg-gray-100'} ${isDimmed ? 'opacity-50' : ''} ${isOver ? 'bg-green-100 border-green-400 border-2' : ''}`}
+                className={rowClassName}
             >
                 {/* Folder Icon */}
                 <span className="mr-1 w-5 h-5 flex items-center justify-center flex-shrink-0 cursor-pointer" onClick={handleRowClick}>
@@ -235,6 +244,7 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
         </div>
     );
 });
+FolderRow.displayName = 'FolderRow'; // Add display name
 
 const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
     folderTree,
@@ -252,87 +262,50 @@ const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
     const [localExpandedIds, setLocalExpandedIds] = useState<Set<string>>(new Set());
     const isSearching = !!searchQuery && searchQuery.length > 0;
 
-    // *** Early exit if no folders exist ***
-    if (!folderTree || folderTree.length === 0) {
-        return (
-            <div className="folder-tree-panel h-full overflow-y-auto border rounded bg-gray-50 p-4 text-center text-gray-500">
-                <h2 className="text-lg font-semibold p-2 flex-shrink-0 border-b mb-2">Folders</h2>
-                No bookmarks loaded.
-            </div>
-        );
-    }
+    // Flatten the tree for rendering in the list
+    const flattenedNodes = useMemo(() => {
+        console.log("[FolderTreePanel] Recalculating flattenedNodes...");
+        // TODO: Check if flattenBookmarkTree needs expandedIds in this version
+        // Assuming it does for now, based on previous attempts
+        const nodes = flattenBookmarkTree(folderTree, localExpandedIds);
+        // Fix: Add Log to check the order
+        console.log("[FolderTreePanel] Flattened node IDs: ", nodes.map(n => n.id));
+        return nodes;
+    }, [folderTree, localExpandedIds]);
 
-    const handleToggleExpand = useCallback((folderId: string) => {
-        setLocalExpandedIds(prevIds => {
-            const newIds = new Set(prevIds);
-            if (newIds.has(folderId)) {
-                newIds.delete(folderId);
+    // Fix: Get IDs for SortableContext
+    const folderIds = useMemo(() => flattenedNodes.map(item => item.id), [flattenedNodes]);
+
+    // Expand/collapse logic
+    const toggleExpand = useCallback((folderId: string) => {
+        setLocalExpandedIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(folderId)) {
+                newSet.delete(folderId);
             } else {
-                newIds.add(folderId);
+                newSet.add(folderId);
             }
-            console.log(`[FolderTreePanel] handleToggleExpand - Updated localExpandedIds:`, newIds);
-            return newIds;
+            return newSet;
         });
     }, []);
 
-    // Flatten the folder tree based on local expansion state
-    const flattenedFolderNodes = useMemo(() => {
-        const flatList = flattenBookmarkTree(folderTree, localExpandedIds);
-        console.log('[FolderTreePanel] Calculated flattenedFolderNodes:', flatList);
-        return flatList;
-    }, [folderTree, localExpandedIds]);
-
-    // Create a key that changes when the number of nodes changes
-    // This helps force react-window to recalculate when items are added/removed
-    const listKey = flattenedFolderNodes.length;
-
-    // Setup droppable for the root element
-    const { setNodeRef: setRootDropRef, isOver: isOverRoot } = useDroppable({
-        id: ROOT_FOLDER_DROP_ID,
-    });
-
-    // Filter out the root droppable area for the list itself
-    const displayNodes = useMemo(() => {
-        console.log('[FolderTreePanel] Recalculating flattenedFolderNodes...');
-        // Add "(All Bookmarks)" item manually
-        const allBookmarksNode: FlattenedBookmarkNode = {
-            id: ROOT_FOLDER_DROP_ID, // Use the special ID
-            node: { id: ROOT_FOLDER_DROP_ID, title: '(All Bookmarks)', children: [] }, // Mock node
-            depth: 0,
-            isExpanded: undefined
-        };
-        const flattened = flattenBookmarkTree(folderTree, localExpandedIds);
-        console.log(`[FolderTreePanel] Calculated flattenedFolderNodes:`, flattened);
-        return [allBookmarksNode, ...flattened];
-    }, [folderTree, localExpandedIds]);
-
-    // --- Context Menu for background --- 
-    const { show: showRootMenu } = useContextMenu({ id: FOLDER_MENU_ID });
-
-    const handleBackgroundContextMenu = (event: React.MouseEvent) => {
-        // Check if the click is directly on the panel background, not on a row
-        if (event.target === event.currentTarget) {
-            event.preventDefault();
-            showRootMenu({
-                event,
-                props: {
-                    nodeId: null, // Indicate root/background click
-                    onEditNode,
-                    onDeleteNode,
-                    onAddFolder,
-                    onAddBookmark,
-                }
-            });
+    // Auto-expand matching folders during search
+    useEffect(() => {
+        if (isSearching && matchingFolderIds) {
+            setLocalExpandedIds(new Set(matchingFolderIds));
+        } else if (!isSearching) {
+            // Optional: Collapse all when search is cleared?
+            // setLocalExpandedIds(new Set());
         }
-    };
+    }, [isSearching, matchingFolderIds]);
 
-    // Prepare data object for FixedSizeList items
+    // Prepare itemData for FixedSizeList
     const itemData = useMemo<RowData>(() => ({
-        nodes: displayNodes,
+        nodes: flattenedNodes,
         selectedFolderId,
         onSelectFolder,
         localExpandedIds,
-        toggleExpand: handleToggleExpand,
+        toggleExpand,
         matchingFolderIds,
         onDeleteNode,
         onEditNode,
@@ -341,11 +314,11 @@ const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
         editingNodeId,
         handleRenameNode
     }), [
-        displayNodes,
+        flattenedNodes,
         selectedFolderId,
         onSelectFolder,
         localExpandedIds,
-        handleToggleExpand,
+        toggleExpand,
         matchingFolderIds,
         onDeleteNode,
         onEditNode,
@@ -355,59 +328,78 @@ const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
         handleRenameNode
     ]);
 
-    // Renderer for react-window list
-    const RowRenderer: React.FC<ListChildComponentProps> = ({ index, style }) => {
-        const flatNode = displayNodes[index];
-        if (!flatNode) return null;
+    // Fix: Add itemKey function for FixedSizeList
+    const getItemKey = useCallback((index: number, data: RowData) => {
+        // Use the unique node ID as the key
+        return data.nodes[index].id;
+    }, []); // Empty dependency array, function itself doesn't depend on state
 
-        // Determine if the folder matches the search criteria (if searching)
-        const isMatch = !isSearching || (matchingFolderIds?.has(flatNode.id) ?? true);
-
-        return (
-            <FolderRow
-                data={itemData}
-                index={index}
-                style={style}
-            />
-        );
+    // Add context menu for the background of the panel
+    const { show: showBackgroundMenu } = useContextMenu({ id: FOLDER_MENU_ID });
+    const handleBackgroundContextMenu = (event: React.MouseEvent) => {
+        // Ensure click is on the panel background, not an item
+        if (event.target === event.currentTarget) {
+            event.preventDefault();
+            console.log("[FolderTreePanel] Context menu for background.");
+            showBackgroundMenu({
+                event,
+                props: {
+                    nodeId: null, // Indicate root context
+                    parentId: null,
+                    onAddFolder: () => onAddFolder(null),
+                    // Disable other actions for root
+                    onDelete: null,
+                    onEdit: null,
+                    onAddBookmark: null,
+                }
+            });
+        }
     };
 
+    // Root droppable area (for adding items to root and context menu)
+    const { setNodeRef: setRootDroppableRef, isOver: isOverRoot } = useDroppable({
+        id: ROOT_FOLDER_DROP_ID,
+        data: { accepts: ['folder'] } // Root only accepts folders for now
+    });
+
     return (
-        <div className="folder-tree-panel h-full overflow-y-auto border rounded bg-gray-50" onContextMenu={handleBackgroundContextMenu}>
-            <h2 className="text-lg font-semibold p-2 flex-shrink-0 border-b">Folders</h2>
-            {/* Root Selection / Drop Target */}
-            <div
-                ref={setRootDropRef} // Attach droppable ref
-                onClick={() => onSelectFolder(null)}
-                className={`p-2 cursor-pointer text-sm flex-shrink-0 border-b 
-                  ${selectedFolderId === null ? 'bg-blue-100 font-bold' : 'hover:bg-gray-100'}
-                  ${isOverRoot ? 'outline outline-2 outline-blue-500' : ''} // Add visual drop indicator
-                `}
-            >
-                (All Bookmarks)
+        <div
+            ref={setRootDroppableRef}
+            className={`h-full overflow-y-auto bg-gray-50 border border-gray-300 rounded flex flex-col ${isOverRoot ? 'bg-blue-50' : ''}`}
+            onContextMenu={handleBackgroundContextMenu}
+        >
+            <div className="p-2 border-b border-gray-300 text-sm font-medium bg-gray-100">
+                Folders
             </div>
-            {/* Virtualized Folder List */}
-            <div className="flex-grow overflow-y-auto">
-                {displayNodes.length === 0 && !isSearching && (
-                    <p className="p-2 text-gray-500 text-sm">No folders found.</p>
-                )}
-                {displayNodes.length === 0 && isSearching && (
-                    <p className="p-2 text-gray-500 text-sm">No folders match search.</p>
-                )}
-                {displayNodes.length > 0 && (
-                    <FixedSizeList
-                        key={listKey} // Add key prop based on item count
-                        height={600}
-                        itemCount={displayNodes.length}
-                        itemSize={ROW_HEIGHT}
-                        width="100%"
-                    >
-                        {RowRenderer}
-                    </FixedSizeList>
-                )}
-            </div>
+            {/* Fix: Wrap FixedSizeList in SortableContext */}
+            <SortableContext items={folderIds} strategy={verticalListSortingStrategy}>
+                <div className="flex-grow p-1"> {/* Padding for list items */}
+                    {folderTree.length === 0 ? (
+                        <div className="p-4 text-gray-500 text-center text-sm">No folders found.</div>
+                    ) : (
+                        <FixedSizeList
+                            height={600} // Adjust height or make dynamic
+                            itemCount={flattenedNodes.length}
+                            itemSize={ROW_HEIGHT}
+                            width="100%"
+                            itemData={itemData}
+                            // Fix: Pass itemKey prop
+                            itemKey={getItemKey}
+                            className="focus:outline-none" // Remove focus ring from list itself
+                        >
+                            {FolderRow}
+                        </FixedSizeList>
+                    )}
+                </div>
+            </SortableContext>
+            {/* Drop indicator for root (optional) */}
+            {isOverRoot && (
+                <div className="p-2 text-center text-xs text-blue-600 border-t border-dashed border-blue-400">
+                    Drop here to move to root
+                </div>
+            )}
         </div>
     );
 };
 
-export default FolderTreePanel; 
+export default memo(FolderTreePanel); 

@@ -1,5 +1,5 @@
 import React, { memo, useState, useRef, useEffect } from 'react';
-import { useDraggable, useDroppable } from '@dnd-kit/core';
+import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { BookmarkNode } from '../types/bookmark';
 import { useContextMenu } from 'react-contexify';
@@ -40,27 +40,11 @@ const BookmarkItem: React.FC<BookmarkItemProps> = memo(
         const {
             attributes,
             listeners,
-            setNodeRef: setDraggableNodeRef,
+            setNodeRef,
             transform,
+            transition,
             isDragging
-        } = useDraggable({ id: node.id, data: { type: 'bookmark', node } });
-
-        const {
-            setNodeRef: setDroppableNodeRef,
-            isOver
-        } = useDroppable({ id: node.id, data: { type: 'bookmark', node } });
-
-        const setCombinedRef = (element: HTMLDivElement | null) => {
-            setDraggableNodeRef(element);
-            setDroppableNodeRef(element);
-        };
-
-        const dndStyle = transform ? {
-            transform: CSS.Translate.toString(transform),
-            zIndex: isDragging ? 10 : undefined,
-            opacity: isDragging ? 0.5 : undefined,
-        } : {};
-        // --- End DND Setup ---
+        } = useSortable({ id: node.id, data: { type: 'bookmark', node } });
 
         // --- Context Menu --- 
         const { show } = useContextMenu({ id: BOOKMARK_MENU_ID });
@@ -138,24 +122,28 @@ const BookmarkItem: React.FC<BookmarkItemProps> = memo(
 
         // --- Styling --- 
         const indentStyle = { paddingLeft: `${depth * 20}px` }; // 20px per level
-        const divClassName = `flex items-center p-1 rounded hover:bg-gray-100 cursor-grab ${isDuplicate ? 'border border-red-300 bg-red-50' : ''} ${isOver ? 'bg-blue-100' : ''}`;
+        const dndStyle = {
+            transform: CSS.Transform.toString(transform),
+            transition,
+            zIndex: isDragging ? 10 : undefined,
+            opacity: isDragging ? 0.5 : undefined,
+        };
+        const divClassName = `flex items-center p-1 rounded hover:bg-gray-100 cursor-grab ${isDuplicate ? 'border border-red-300 bg-red-50' : ''}`;
         // --- End Styling ---
 
         // --- Return JSX --- 
         return (
             <div
-                ref={setCombinedRef}
-                style={{ ...style, ...dndStyle, ...indentStyle }} // Combine styles
+                ref={setNodeRef}
+                style={{ ...style, ...dndStyle, paddingLeft: `${depth * 20}px` }}
                 className={divClassName}
-                {...(editingNodeId ? {} : listeners)} // Conditionally apply listeners
                 {...attributes}
-                onClick={handleToggleExpand} // Toggle handled here (if optional prop provided)
+                {...(editingNodeId ? {} : listeners)} // Conditionally apply listeners
                 onContextMenu={handleContextMenu}
-                title={`${node.title}${node.url ? ' (' + node.url + ')' : ''} (Right-click to delete)`}
+                title={`${node.title}${node.url ? ' (' + node.url + ')' : ''} (Right-click)`}
             >
                 {/* Icon */}
                 <span
-                    onClick={isFolder ? handleToggleExpand : undefined} // Allow icon click to toggle too for folders
                     className="mr-2 w-4 h-5 text-center flex-shrink-0 flex items-center justify-center hover:bg-gray-200 rounded"
                 >
                     {isFolder ? (isExpanded ? '📂' : '📁') : '📄'}

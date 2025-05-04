@@ -28,7 +28,7 @@ const parseBookmarkHtml = (htmlContent: string): BookmarkNode[] => {
     if (mainDl instanceof HTMLDListElement) {
         console.log('[parseBookmarkHtml] Found main DL, starting recursive parse...');
         try {
-            const result = parseDl(mainDl, counter); // Pass counter
+            const result = parseDl(mainDl, counter, null);
             console.log(`[parseBookmarkHtml] Recursive parse complete. Total items processed: ${counter.count}`);
             return result;
         } catch (error) {
@@ -42,7 +42,7 @@ const parseBookmarkHtml = (htmlContent: string): BookmarkNode[] => {
     if (fallbackDl instanceof HTMLDListElement) {
         console.warn("[parseBookmarkHtml] Using fallback DL, starting recursive parse...");
         try {
-            const result = parseDl(fallbackDl, counter); // Pass counter
+            const result = parseDl(fallbackDl, counter, null);
             console.log(`[parseBookmarkHtml] Fallback recursive parse complete. Total items processed: ${counter.count}`);
             return result;
         } catch (error) {
@@ -66,7 +66,7 @@ const parseBookmarkHtml = (htmlContent: string): BookmarkNode[] => {
  * @returns {BookmarkNode[]} An array of bookmark nodes parsed from the DL.
  * @throws {BookmarkLimitExceededError} If the total number of nodes exceeds MAX_BOOKMARKS.
  */
-const parseDl = (dlElement: HTMLDListElement, counter: { count: number }): BookmarkNode[] => {
+const parseDl = (dlElement: HTMLDListElement, counter: { count: number }, parentId: string | null): BookmarkNode[] => {
     const nodes: BookmarkNode[] = [];
     const children = Array.from(dlElement.children);
     let idCounter = 0;
@@ -104,7 +104,7 @@ const parseDl = (dlElement: HTMLDListElement, counter: { count: number }): Bookm
         if (anchor) {
             // Bookmark Link
             console.log(`  [parseDl] Processing Bookmark Link: \"${anchor.textContent?.trim()}\" at index ${i}`);
-            newNode = { id: nodeId, title: anchor.textContent?.trim() || 'Untitled Bookmark', url: anchor.getAttribute('href') || undefined };
+            newNode = { id: nodeId, title: anchor.textContent?.trim() || 'Untitled Bookmark', url: anchor.getAttribute('href') || undefined, parentId: parentId };
         } else if (header) {
             // Folder
             const folderTitle = header.textContent?.trim() || 'Untitled Folder';
@@ -128,8 +128,8 @@ const parseDl = (dlElement: HTMLDListElement, counter: { count: number }): Bookm
             }
 
             // Recursively parse the nested DL if found, otherwise children is empty
-            const childNodes = nestedDl ? parseDl(nestedDl, counter) : [];
-            newNode = { id: nodeId, title: folderTitle, children: childNodes };
+            const childNodes = nestedDl ? parseDl(nestedDl, counter, nodeId) : [];
+            newNode = { id: nodeId, title: folderTitle, children: childNodes, parentId: parentId };
 
             // If we processed a nested DL, we need to advance the loop counter
             // an extra step to skip over it in the *next* iteration.

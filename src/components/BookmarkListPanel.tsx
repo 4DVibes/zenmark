@@ -1,6 +1,11 @@
 import React, { useMemo, memo } from 'react';
 // Assuming we might reuse react-window here too
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
+// Fix: Add imports for SortableContext
+import {
+    SortableContext,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 // Import only BookmarkNode now
 import { BookmarkNode } from '../types/bookmark';
 // Import the actual BookmarkItem component we used before
@@ -39,6 +44,9 @@ const BookmarkListPanel: React.FC<BookmarkListPanelProps> = ({
 }) => {
     console.log('BookmarkListPanel rendering with:', { bookmarkNodes });
 
+    // Fix: Prepare IDs for SortableContext
+    const bookmarkIds = useMemo(() => (bookmarkNodes || []).map(node => node.id), [bookmarkNodes]);
+
     const itemData = useMemo<BookmarkItemData>(() => ({
         nodes: bookmarkNodes,
         onDeleteNode,
@@ -58,28 +66,40 @@ const BookmarkListPanel: React.FC<BookmarkListPanelProps> = ({
         <BookmarkItem
             style={style} // Pass style for positioning
             node={data.nodes[index]}
+            // Fix: Pass depth (always 0 for this flat list)
+            depth={0}
             onDeleteNode={data.onDeleteNode}
             onEditNode={data.onEditNode}
             onAddBookmark={data.onAddBookmark} // Pass down handler
             editingNodeId={data.editingNodeId} // Pass down state
             handleRenameNode={data.handleRenameNode} // Pass down handler
-            isDuplicate={data.duplicateIds?.has(data.nodes[index].id)}
+            isDuplicate={!!data.duplicateIds?.has(data.nodes[index].id)}
         />
     ));
     Row.displayName = 'BookmarkRow'; // Add display name for DevTools
 
     return (
-        <div className="h-full bg-white">
-            <FixedSizeList
-                height={600} // Adjust or make dynamic
-                itemCount={bookmarkNodes.length}
-                itemSize={40} // Adjust based on BookmarkItem height
-                width="100%"
-                itemData={itemData}
-            >
-                {Row}
-            </FixedSizeList>
-        </div>
+        // Fix: Wrap FixedSizeList in SortableContext
+        <SortableContext items={bookmarkIds} strategy={verticalListSortingStrategy}>
+            <div className="h-full bg-white">
+                {/* No change needed for the empty state message */}
+                {bookmarkNodes.length === 0 ? (
+                    <div className="p-4 text-gray-500">Select a folder or upload bookmarks.</div>
+                ) : (
+                    <FixedSizeList
+                        height={600} // Adjust or make dynamic
+                        itemCount={bookmarkNodes.length}
+                        itemSize={40} // Adjust based on BookmarkItem height
+                        width="100%"
+                        itemData={itemData}
+                        // Add itemKey for react-window optimization
+                        itemKey={(index, data) => data.nodes[index].id}
+                    >
+                        {Row}
+                    </FixedSizeList>
+                )}
+            </div>
+        </SortableContext>
     );
 };
 
