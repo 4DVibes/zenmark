@@ -72,7 +72,7 @@ This PRD outlines the completed MVP and ongoing development phases.
 - **Requirements Met**:
   - Added `findDuplicateUrls` in `treeUtils.ts`.
   - Highlighted duplicates in the content panel (`BookmarkListPanel` via `BookmarkItem`).
-  - Added "Remove Duplicates" button with confirmation dialog (`App.tsx`). **Button moved to top action bar.**
+  - Added "Show Duplicates" button (`App.tsx`). **Button moved to top action bar. TODO: This button should open a new modal allowing users to view all duplicates in a list, multiselect one or more, select all, and remove selected.**
 - **Success Criteria**: Functionality implemented and verified.
 
 #### 3.1.5 Bookmark Export
@@ -161,18 +161,18 @@ This PRD outlines the completed MVP and ongoing development phases.
 *   **DONE:** ~~Bookmark Saving:~~ Persist bookmark data locally (e.g., IndexedDB).
 *   **DONE:** ~~UI Polish: Modals~~ Replace `window.prompt` for Add/Edit with proper modals.
 *   **DONE:** ~~UI Polish: Layout/Styling~~ Refactor main layout, adjust text alignment, increase folder row height.
-*   **UI Polish:** Improve inline editing UI/UX.
-*   **UI Polish (In Progress):** Responsiveness (ensure usability on smaller screens).
+*   **DONE:** ~~UI Polish: Improve inline editing UI/UX.~~
+*   **UI Polish (Pending):** Responsiveness (review/complete).
 *   **NEW (TODO): Search Functionality:** Fix search filtering (currently broken).
 *   **DONE:** ~~UI Polish: Implement "Add New" buttons in panel headers.~~
-*   **NEW (TODO): UI Polish:** Add "All Bookmarks" root representation in folder tree.
+*   **DONE:** ~~UI Polish: Add "All Bookmarks" root representation in folder tree.~~
 *   **DEFERRED:** ~~Performance Validation:~~ Test with large bookmark files (e.g., 10k+ items).
 
 ### Phase 3: Advanced Features
 
 *   **DONE:** ~~Search/Filtering:~~ Implement efficient search across titles, URLs, tags, notes.
-*   Duplicate Detection/Resolution.
-*   **NEW (TODO): Multi-select & Bulk Actions:** Implement multi-selection and a "Delete Selected" action.
+*   Duplicate Detection/Resolution. **(Covered by new modal in 3.1.4)**
+*   **NEW (TODO): Multi-select & Bulk Actions:** Implement multi-selection in both panels. For now, a right-click context menu on multi-selected items should offer a "Delete Selected" action.
 *   More Robust Error Handling.
 
 ### Future Enhancements

@@ -24,7 +24,7 @@ import {
 } from '@dnd-kit/sortable';
 import FileUpload from './components/FileUpload';
 import SearchBar from './components/SearchBar';
-import FolderTreePanel, { ROOT_FOLDER_DROP_ID } from './components/FolderTreePanel';
+import FolderTreePanel, { ROOT_FOLDER_DROP_ID, ALL_BOOKMARKS_ITEM_ID } from './components/FolderTreePanel';
 import BookmarkListPanel from './components/BookmarkListPanel';
 import { loadBookmarks, saveBookmarks, clearBookmarks } from './utils/bookmarkStorage';
 import { parseBookmarkFile } from './utils/bookmarkParser';
@@ -89,6 +89,17 @@ const App: React.FC = () => {
   const [modalTargetParentId, setModalTargetParentId] = useState<string | null>(null);
 
   const debouncedSave = useMemo(() => debounce(saveBookmarks, SAVE_DEBOUNCE_DELAY), []);
+
+  // Apply search filtering to the entire bookmark tree
+  const { filteredNodes: filteredBookmarksMemo, matchingFolderIds: FOLDER_IDS_MATCHING_SEARCH_QUERY } = useMemo(() => {
+    console.log(`[App] Filtering all bookmarks with searchTerm: "${searchTerm}"`);
+    if (!searchTerm) {
+      return { filteredNodes: bookmarks, matchingFolderIds: new Set<string>() };
+    }
+    const results = filterBookmarkTree(bookmarks, searchTerm);
+    console.log(`[App] filterBookmarkTree results: ${results.filteredNodes.length} nodes, ${results.matchingFolderIds.size} matching folders`);
+    return results;
+  }, [bookmarks, searchTerm]);
 
   const handleTreeUpdate = useCallback((newTreeOrUpdater: BookmarkNode[] | ((currentTree: BookmarkNode[]) => BookmarkNode[])) => {
     console.log('[App] handleTreeUpdate called...');
@@ -173,13 +184,25 @@ const App: React.FC = () => {
 
     console.log(`[App DragEnd] Event: Item ${active.id} (${activeType}) dropped over ID: ${overId} (${overType ?? 'N/A'})`);
 
-    if (overId === ROOT_FOLDER_DROP_ID || (overType === 'folder')) {
-      console.log(`  Scenario: Move ${activeType} to ${overId === ROOT_FOLDER_DROP_ID ? 'Root' : 'Folder ' + overId}`);
+    // Handle drops onto ROOT, the "All Bookmarks" item, or any regular folder
+    if (overId === ROOT_FOLDER_DROP_ID || overId === ALL_BOOKMARKS_ITEM_ID || (overType === 'folder')) {
+      const isRootDropTarget = overId === ROOT_FOLDER_DROP_ID || overId === ALL_BOOKMARKS_ITEM_ID;
+      console.log(`  Scenario: Move ${activeType} to ${isRootDropTarget ? 'Root (via All Bookmarks or direct root drop)' : 'Folder ' + overId}`);
+
+      // Prevent dragging a root-level folder to the root again
+      if (activeType === 'folder' && (activeNode.parentId === null || activeNode.parentId === undefined) && isRootDropTarget) {
+        console.warn("    [Move] Aborting: Cannot drag a root folder to the root again.");
+        return;
+      }
+
       handleTreeUpdate((currentBookmarks) => {
         const nodeToMove = findNodeById(currentBookmarks, active.id as string);
-        if (!nodeToMove) return currentBookmarks;
+        if (!nodeToMove) {
+          console.warn("    [Move] Node to move not found in currentBookmarks. Aborting.");
+          return currentBookmarks;
+        }
 
-        const finalTargetId = overId === ROOT_FOLDER_DROP_ID ? null : overId;
+        const finalTargetId = isRootDropTarget ? null : overId;
         const position = finalTargetId ? 'inside' : 'root';
 
         if (activeType === 'folder' && position === 'inside' && finalTargetId && findNodeById([nodeToMove], finalTargetId)) {
@@ -187,14 +210,19 @@ const App: React.FC = () => {
           return currentBookmarks;
         }
 
-        console.log(`    [Move] Removing node ${nodeToMove.id} from original position.`);
+        console.log(`    [Move] Removing node ${nodeToMove.id} (parentId: ${nodeToMove.parentId}, title: ${nodeToMove.title}) from original position.`);
         const treeWithoutNode = removeNodeById(currentBookmarks, nodeToMove.id);
 
         console.log(`    [Move] Updating parentId of moved node ${nodeToMove.id} to: ${finalTargetId}`);
         const updatedNodeToMove = { ...nodeToMove, parentId: finalTargetId };
 
-        console.log(`    [Move] Inserting node...`, { node: updatedNodeToMove, position, targetId: finalTargetId });
+        console.log(`    [Move] Inserting node (title: ${updatedNodeToMove.title}, new parentId: ${updatedNodeToMove.parentId}) with position: ${position}, targetId (for insertNode): ${finalTargetId === null ? 'null (root)' : finalTargetId}`);
         const newTree = insertNode(treeWithoutNode, finalTargetId, updatedNodeToMove, position);
+
+        if (finalTargetId === null) {
+          console.log(`    [Move to Root] New tree length: ${newTree.length}. Node inserted:`, newTree.find(n => n.id === updatedNodeToMove.id));
+          console.log(`    [Move to Root] Full newTree (first 5):`, newTree.slice(0, 5).map(n => ({ id: n.id, title: n.title, parentId: n.parentId })));
+        }
         console.log("    [Move] Move operation complete.");
         return newTree;
       });
@@ -549,41 +577,40 @@ const App: React.FC = () => {
     }
   };
 
-  const selectedFolderContent = useMemo(() => {
-    console.log(`[App] Calculating selectedFolderContent for ID: ${selectedFolderId}`);
+  const folderTreeForPanel = useMemo(() => {
+    console.log('[App] Recalculating folderTreeForPanel for display...');
+    return extractFolderTree(bookmarks); // Full folder structure for navigation
+  }, [bookmarks]);
+
+  const rightPanelNodesToDisplay = useMemo(() => {
+    console.log(`[App] Recalculating rightPanelNodesToDisplay for selectedFolderId: ${selectedFolderId} with searchTerm: "${searchTerm}"`);
+    const sourceTree = searchTerm ? filteredBookmarksMemo : bookmarks;
+
     if (selectedFolderId === ROOT_FOLDER_DROP_ID) {
-      const rootBookmarks = bookmarks.filter(node => node.children === undefined);
-      console.log(`[App] Root selected. Found ${rootBookmarks.length} root bookmarks.`);
+      // If searching, show all top-level bookmarks from the filtered tree.
+      // If not searching, show only true root bookmarks from the original tree.
+      const rootBookmarks = sourceTree.filter(node =>
+        node.children === undefined && // It's a bookmark
+        (searchTerm ? true : node.parentId === null) // If searching, any top-level; else, only actual root
+      );
+      console.log(`[App] Root selected. Found ${rootBookmarks.length} root bookmarks from sourceTree.`);
       return rootBookmarks;
     } else if (selectedFolderId) {
-      const folder = findNodeById(bookmarks, selectedFolderId);
+      // Find the selected folder within the appropriate tree (filtered or original)
+      const folder = findNodeById(sourceTree, selectedFolderId);
       if (folder && folder.children) {
+        // Children are already filtered if sourceTree is filteredBookmarksMemo
         const folderBookmarks = folder.children.filter(node => node.children === undefined);
-        console.log(`[App] Folder ${selectedFolderId} selected. Found folder: ${folder.title}. Returning ${folderBookmarks.length} bookmark children.`);
+        console.log(`[App] Folder ${selectedFolderId} (${folder.title}) selected. Found ${folderBookmarks.length} bookmark children in sourceTree.`);
         return folderBookmarks;
       } else {
-        console.warn(`[App] Selected folder ${selectedFolderId} not found or has no children.`);
+        console.warn(`[App] Selected folder ${selectedFolderId} not found in sourceTree or has no children.`);
         return [];
       }
     }
-    console.log(`[App] No folder ID selected or invalid. Returning empty array.`);
+    console.log(`[App] No folderID or invalid selectedFolderId. Returning empty array for right panel.`);
     return [];
-  }, [bookmarks, selectedFolderId]);
-
-  const folderTree = useMemo(() => {
-    console.log('[App] Recalculating folderTree...');
-    return extractFolderTree(bookmarks);
-  }, [bookmarks]);
-
-  const rightPanelNodes = useMemo(() => {
-    console.log('[App] Recalculating rightPanelNodes...');
-    const children = selectedFolderId === ROOT_FOLDER_DROP_ID
-      ? bookmarks
-      : findNodeById(bookmarks, selectedFolderId ?? '')?.children;
-    const bookmarkItemsOnly = (children || []).filter(node => node.url !== undefined && node.url !== null);
-    console.log(`[App] Bookmark items for right panel (FolderID: ${selectedFolderId}):`, bookmarkItemsOnly.length);
-    return bookmarkItemsOnly;
-  }, [bookmarks, selectedFolderId]);
+  }, [bookmarks, filteredBookmarksMemo, selectedFolderId, searchTerm]);
 
   if (loading) {
     return (
@@ -601,7 +628,7 @@ const App: React.FC = () => {
       onDragCancel={handleDragCancel}
       collisionDetection={rectIntersection}
     >
-      <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-[#E9EEEB] flex flex-col items-center justify-center p-4">
         <div className="bg-white shadow-md rounded-lg p-4 max-w-7xl w-full h-[85vh] flex flex-col">
           <div className="flex items-center space-x-3 mb-4 pb-4 border-b border-gray-200 flex-shrink-0">
             <img src={zenmarkLogo} alt="Zenmark Logo" className="h-20 w-20" />
@@ -650,10 +677,11 @@ const App: React.FC = () => {
           <div className="flex flex-col lg:flex-row flex-grow min-h-0">
             <div className="w-full lg:w-1/3 lg:max-w-xs flex-shrink-0 h-full mb-4 lg:mb-0 lg:mr-4">
               <FolderTreePanel
-                folderTree={folderTree}
+                folderTree={folderTreeForPanel} // Use the full folder tree for navigation
                 selectedFolderId={selectedFolderId}
                 onSelectFolder={handleSelectFolder}
                 searchQuery={searchTerm}
+                matchingFolderIds={FOLDER_IDS_MATCHING_SEARCH_QUERY} // Pass a set of matching folder IDs for dimming
                 onDeleteNode={handleDeleteNode}
                 onEditNode={setEditingNodeId}
                 onAddFolder={handleAddFolder}
@@ -666,7 +694,7 @@ const App: React.FC = () => {
             <div className="w-full lg:flex-grow h-full min-w-0 flex flex-col">
               <div className="flex-grow overflow-auto">
                 <BookmarkListPanel
-                  bookmarkNodes={rightPanelNodes}
+                  bookmarkNodes={rightPanelNodesToDisplay} // Use the correctly filtered nodes
                   onDeleteNode={handleDeleteNode}
                   onEditNode={setEditingNodeId}
                   onAddBookmark={() => handleAddBookmark(selectedFolderId)}

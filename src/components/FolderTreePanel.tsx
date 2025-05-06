@@ -15,6 +15,7 @@ import {
 
 // Define ID for the root drop target (Still useful for context menu/adding)
 export const ROOT_FOLDER_DROP_ID = '__ROOT__';
+export const ALL_BOOKMARKS_ITEM_ID = '__ALL_BOOKMARKS__'; // ID for the new item
 
 interface FolderTreePanelProps {
     folderTree: BookmarkNode[];        // Tree containing only folders
@@ -44,12 +45,14 @@ interface RowData {
     localExpandedIds: Set<string>;
     toggleExpand: (folderId: string) => void;
     matchingFolderIds?: Set<string>;
+    searchQuery?: string; // Add searchQuery to RowData
     onDeleteNode: (nodeId: string) => void;
     onEditNode: (nodeId: string) => void;
     onAddFolder: (parentId: string | null) => void;
     onAddBookmark: (parentId: string | null) => void;
     editingNodeId: string | null;
     handleRenameNode: (nodeId: string, newTitle: string) => void;
+    isAllBookmarksRow?: boolean; // Indicate if it's the special row
 }
 
 // Internal component to render a single folder row (Reverting to useDraggable/useDroppable)
@@ -61,6 +64,7 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
         localExpandedIds,
         toggleExpand,
         matchingFolderIds,
+        searchQuery,
         onDeleteNode,
         onEditNode,
         onAddFolder,
@@ -71,10 +75,20 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
 
     const node = nodes[index];
     const bookmarkNode = node.node;
+    const isAllBookmarksItem = node.id === ALL_BOOKMARKS_ITEM_ID;
 
-    const isSelected = selectedFolderId === bookmarkNode.id;
+    const isSelected = isAllBookmarksItem
+        ? selectedFolderId === ROOT_FOLDER_DROP_ID
+        : selectedFolderId === bookmarkNode.id;
     const isExpanded = localExpandedIds.has(bookmarkNode.id);
-    const isDimmed = matchingFolderIds && !matchingFolderIds.has(bookmarkNode.id);
+
+    // Revised isDimmed logic
+    const isSearchingActive = searchQuery && searchQuery.length > 0;
+    const isDimmed = !isAllBookmarksItem &&
+        isSearchingActive &&
+        matchingFolderIds &&
+        !matchingFolderIds.has(bookmarkNode.id);
+
     const isEditing = editingNodeId === bookmarkNode.id;
 
     const { show } = useContextMenu({ id: FOLDER_MENU_ID });
@@ -154,7 +168,11 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
         transition,
         isDragging,
         isOver
-    } = useSortable({ id: bookmarkNode.id, data: { node: bookmarkNode, type: 'folder' } });
+    } = useSortable({
+        id: node.id, // Use node.id which is unique
+        data: { node: bookmarkNode, type: isAllBookmarksItem ? 'all_bookmarks_item' : 'folder' },
+        disabled: isAllBookmarksItem, // Disable sorting for "All Bookmarks"
+    });
 
     const dragStyle = {
         transform: CSS.Transform.toString(transform),
@@ -166,7 +184,7 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
 
     const finalStyle = {
         ...style,
-        paddingLeft: `${node.depth * INDENT_WIDTH + 8}px`,
+        paddingLeft: isAllBookmarksItem ? '8px' : `${node.depth * INDENT_WIDTH + 8}px`,
         ...dragStyle
     };
 
@@ -177,15 +195,21 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
         ${isOver ? 'bg-blue-200 border-blue-400 border-2' : ''}
     `;
 
+    // Conditional logic for rendering "All Bookmarks" vs. regular folders will go here later
+    // For now, just logging to confirm it receives the item
+    if (isAllBookmarksItem) {
+        console.log("[FolderRow] Rendering ALL_BOOKMARKS_ITEM_ID");
+    }
+
     return (
-        <div ref={setNodeRef} style={finalStyle} {...attributes} {...(isEditing ? {} : listeners)} onContextMenu={handleContextMenu}>
+        <div ref={setNodeRef} style={finalStyle} {...attributes} {...(isEditing || isAllBookmarksItem ? {} : listeners)} onContextMenu={isAllBookmarksItem ? undefined : handleContextMenu}>
             <div className={rowClassName}>
                 {/* Folder Icon & Click Handler - Increased Size */}
-                <span className="mr-2 w-6 h-6 flex items-center justify-center flex-shrink-0 cursor-pointer text-lg" onClick={handleRowClick}>
-                    {isExpanded ? '📂' : '📁'}
+                <span className="mr-2 w-6 h-6 flex items-center justify-center flex-shrink-0 cursor-pointer text-lg" onClick={isAllBookmarksItem ? () => onSelectFolder(ROOT_FOLDER_DROP_ID) : handleRowClick}>
+                    {isAllBookmarksItem ? '🏠' : (isExpanded ? '📂' : '📁')}
                 </span>
                 {/* Title or Input */}
-                {isEditing ? (
+                {isEditing && !isAllBookmarksItem ? (
                     <input
                         ref={inputRef}
                         type="text"
@@ -197,8 +221,8 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
                         onClick={(e) => e.stopPropagation()}
                     />
                 ) : (
-                    <span className="flex-grow truncate cursor-pointer text-left text-sm" onClick={handleRowClick}>
-                        {bookmarkNode.title}
+                    <span className={`flex-grow truncate cursor-pointer text-left text-sm text-gray-800 ${isAllBookmarksItem ? 'font-medium' : ''}`} onClick={isAllBookmarksItem ? () => onSelectFolder(ROOT_FOLDER_DROP_ID) : handleRowClick}>
+                        {isAllBookmarksItem ? "All Bookmarks" : bookmarkNode.title}
                     </span>
                 )}
             </div>
@@ -226,15 +250,29 @@ const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
     const isSearching = !!searchQuery && searchQuery.length > 0;
 
     // Flatten the tree for rendering in the list
-    const flattenedNodes = useMemo(() => {
-        console.log("[FolderTreePanel] Recalculating flattenedNodes...");
-        const nodes = flattenBookmarkTree(folderTree, localExpandedIds);
-        console.log("[FolderTreePanel] Flattened node IDs: ", nodes.map(n => n.id));
-        return nodes;
+    const flattenedNodesAndAllBookmarks = useMemo(() => {
+        const allBookmarksPseudoNode: FlattenedBookmarkNode = {
+            id: ALL_BOOKMARKS_ITEM_ID,
+            node: { // This is a pseudo BookmarkNode structure
+                id: ALL_BOOKMARKS_ITEM_ID,
+                title: 'All Bookmarks',
+                parentId: null,
+                children: undefined, // Important: signifies it's not a folder for some utils
+                // dateAdded and other BookmarkNode fields can be omitted if not strictly needed by FolderRow for this item
+            },
+            depth: 0,
+            isExpanded: undefined, // Not expandable
+        };
+        const actualFlattenedFolders = flattenBookmarkTree(folderTree, localExpandedIds);
+        return [allBookmarksPseudoNode, ...actualFlattenedFolders];
     }, [folderTree, localExpandedIds]);
 
     // Fix: Get IDs for SortableContext
-    const folderIds = useMemo(() => flattenedNodes.map(item => item.id), [flattenedNodes]);
+    const folderIdsForSortableContext = useMemo(() =>
+        flattenedNodesAndAllBookmarks
+            .filter(item => item.id !== ALL_BOOKMARKS_ITEM_ID)
+            .map(item => item.id)
+        , [flattenedNodesAndAllBookmarks]);
 
     // Expand/collapse logic
     const toggleExpand = useCallback((folderId: string) => {
@@ -261,12 +299,13 @@ const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
 
     // Prepare itemData for FixedSizeList
     const itemData = useMemo<RowData>(() => ({
-        nodes: flattenedNodes,
+        nodes: flattenedNodesAndAllBookmarks,
         selectedFolderId,
         onSelectFolder,
         localExpandedIds,
         toggleExpand,
         matchingFolderIds,
+        searchQuery,
         onDeleteNode,
         onEditNode,
         onAddFolder,
@@ -274,12 +313,13 @@ const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
         editingNodeId,
         handleRenameNode
     }), [
-        flattenedNodes,
+        flattenedNodesAndAllBookmarks,
         selectedFolderId,
         onSelectFolder,
         localExpandedIds,
         toggleExpand,
         matchingFolderIds,
+        searchQuery,
         onDeleteNode,
         onEditNode,
         onAddFolder,
@@ -341,13 +381,13 @@ const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
             <div className="flex-grow p-1 overflow-hidden">
                 <AutoSizer>
                     {({ height, width }) => (
-                        <SortableContext items={folderIds} strategy={verticalListSortingStrategy}>
+                        <SortableContext items={folderIdsForSortableContext} strategy={verticalListSortingStrategy}>
                             {folderTree.length === 0 ? (
                                 <div className="p-4 text-gray-500 text-center text-sm">No folders found.</div>
                             ) : (
                                 <FixedSizeList
                                     height={height}
-                                    itemCount={flattenedNodes.length}
+                                    itemCount={flattenedNodesAndAllBookmarks.length}
                                     itemSize={ROW_HEIGHT}
                                     width={width}
                                     itemData={itemData}

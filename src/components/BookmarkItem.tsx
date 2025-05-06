@@ -170,7 +170,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = memo(
                         onClick={(e) => e.stopPropagation()} // Prevent drag start when clicking input
                     />
                 ) : (
-                    <span className="truncate flex-grow text-left text-sm" title={node.url || node.title}>
+                    <span className="truncate flex-grow text-left text-sm text-gray-800" title={node.url || node.title}>
                         {node.title}
                     </span>
                 )}

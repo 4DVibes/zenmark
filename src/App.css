@@ -1,3 +1,32 @@
+body {
+  background-color: #E9EEEB;
+  /* Set desired page background color */
+  margin: 0;
+  /* Ensure no default body margins */
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* Default Vite body styles */
+  line-height: 1.5;
+  /* Default Vite body styles */
+  font-weight: 400;
+  /* Default Vite body styles */
+
+  color-scheme: light dark;
+  /* Default Vite body styles */
+  color: rgba(255, 255, 255, 0.87);
+  /* Default Vite body styles - MIGHT NEED ADJUSTMENT if using light theme primarily*/
+  /* background-color: #242424; */
+  /* Default Vite body dark bg - COMMENTED OUT */
+
+  font-synthesis: none;
+  /* Default Vite body styles */
+  text-rendering: optimizeLegibility;
+  /* Default Vite body styles */
+  -webkit-font-smoothing: antialiased;
+  /* Default Vite body styles */
+  -moz-osx-font-smoothing: grayscale;
+  /* Default Vite body styles */
+}
+
 #root {
   max-width: 1280px;
   margin: 0 auto;
@@ -11,9 +40,11 @@
   will-change: filter;
   transition: filter 300ms;
 }
+
 .logo:hover {
   filter: drop-shadow(0 0 2em #646cffaa);
 }
+
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafbaa);
 }
@@ -22,6 +53,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }

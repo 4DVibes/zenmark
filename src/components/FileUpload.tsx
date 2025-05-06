@@ -31,7 +31,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUpload, onClearData, hasData,
     });
 
     return (
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-4">
             <div {...getRootProps()} className={`p-2 border-2 border-dashed rounded cursor-pointer ${isDragActive ? 'border-blue-500 bg-blue-100' : 'border-gray-300'}`}>
                 <input {...getInputProps()} />
                 <p className="text-sm text-gray-600">
