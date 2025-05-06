@@ -16,7 +16,7 @@ const AddFolderModalContent: React.FC<AddFolderModalContentProps> = ({ onCancel,
     };
 
     return (
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} id="add-folder-form">
             <label htmlFor="folderName" className="block text-sm font-medium text-gray-700 mb-1">
                 Folder Name:
             </label>

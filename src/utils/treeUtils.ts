@@ -166,8 +166,8 @@ export const insertNode = (
 ): BookmarkNode[] => {
     console.log(`[insertNode] Attempting insert relative to ${targetId ?? 'root'} at position ${position}`);
     if (position === 'root' || targetId === null) {
-        console.log(`[insertNode] Inserting at root:`, newNode);
-        const newTree = [newNode, ...nodes];
+        console.log(`[insertNode] Inserting at root by appending:`, newNode);
+        const newTree = [...nodes, newNode]; // Changed to append
         console.log(`[insertNode] Root insert result: ref changed=${newTree !== nodes}`);
         return newTree;
     }

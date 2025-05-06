@@ -197,7 +197,7 @@ const FolderRow = memo(({ index, style, data }: ListChildComponentProps<RowData>
                         onClick={(e) => e.stopPropagation()}
                     />
                 ) : (
-                    <span className="flex-grow truncate cursor-pointer text-left" onClick={handleRowClick}>
+                    <span className="flex-grow truncate cursor-pointer text-left text-sm" onClick={handleRowClick}>
                         {bookmarkNode.title}
                     </span>
                 )}
@@ -328,8 +328,15 @@ const FolderTreePanel: React.FC<FolderTreePanelProps> = ({
             className={`h-full overflow-hidden bg-gray-50 border border-gray-300 rounded flex flex-col ${isOverRoot ? 'bg-blue-50' : ''}`}
             onContextMenu={handleBackgroundContextMenu}
         >
-            <div className="p-2 border-b border-gray-300 text-lg font-semibold bg-gray-100 text-left flex-shrink-0">
-                Folders
+            <div className="p-2 border-b border-gray-300 bg-gray-100 text-left flex justify-between items-center flex-shrink-0">
+                <span className="text-base font-semibold text-gray-800">Folders</span>
+                <button
+                    onClick={() => onAddFolder(null)} // Add to root
+                    className="px-2 py-1 text-xs border border-gray-400 text-gray-700 hover:bg-gray-100 rounded flex-shrink-0"
+                    title="Add New Folder"
+                >
+                    + Add Folder
+                </button>
             </div>
             <div className="flex-grow p-1 overflow-hidden">
                 <AutoSizer>

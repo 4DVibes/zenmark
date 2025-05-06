@@ -128,7 +128,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = memo(
             zIndex: isDragging ? 10 : undefined,
             opacity: isDragging ? 0.5 : undefined,
         };
-        const divClassName = `flex items-center p-1 rounded hover:bg-gray-100 cursor-grab ${isDuplicate ? 'border border-red-300 bg-red-50' : ''}`;
+        const divClassName = `flex items-center py-1 px-3 rounded hover:bg-gray-100 cursor-grab ${isDuplicate ? 'border border-red-300 bg-red-50' : ''}`;
         // --- End Styling ---
 
         // Apply transform and transition for sorting animation
@@ -170,7 +170,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = memo(
                         onClick={(e) => e.stopPropagation()} // Prevent drag start when clicking input
                     />
                 ) : (
-                    <span className="truncate flex-grow text-left" title={node.url || node.title}>
+                    <span className="truncate flex-grow text-left text-sm" title={node.url || node.title}>
                         {node.title}
                     </span>
                 )}

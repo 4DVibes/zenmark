@@ -9,9 +9,9 @@ Zenmark is a web-based bookmark manager that enables users to import, organize, 
 As of [Current Date - e.g., July 2024], the Zenmark web app ([https://github.com/4DVibes/zenmark-web](https://github.com/4DVibes/zenmark-web)) has completed its core MVP features and initial performance enhancements. It now supports:
 - Uploading and parsing Chrome/Edge bookmark HTML files (up to 10,000 items). **Resolved issues with parsing nested folder structures.**
 - Persistent storage using IndexedDB.
-- A two-panel UI (Folder Tree on left, Contents on right) with virtualization (`react-window`) for scalability.
+- A two-panel UI (Folder Tree on left, Contents on right) with virtualization (`react-window`) for scalability. **Layout updated with header, action bar, and panels.**
 - Drag-and-drop reordering (basic implementation, needs refinement for inter-panel drops).
-- Search functionality (filtering both folder tree and content panel).
+- Search functionality (filtering both folder tree and content panel). **Needs debugging.**
 - Duplicate detection (based on URL) and removal.
 - Exporting bookmarks back to Chrome/Edge compatible HTML format.
 
@@ -48,7 +48,7 @@ This PRD outlines the completed MVP and ongoing development phases.
 #### 3.1.2 Intuitive UX with Drag-and-Drop
 - **Description**: Clean, interactive UI with drag-and-drop and simple actions.
 - **Requirements Met**:
-  - Implemented two-panel layout (`FolderTreePanel`, `BookmarkListPanel`). **Core interaction (selecting folder displays contents) is now functional after parser fixes.**
+  - Implemented two-panel layout (`FolderTreePanel`, `BookmarkListPanel`). **Layout refined with dedicated header and action bar.** Core interaction (selecting folder displays contents) is now functional after parser fixes.
   - Basic drag-and-drop for reordering within panels using `@dnd-kit/core`.
   - **Implemented context menus (`react-contexify`) for right-click actions: Add Folder, Add Bookmark, Rename, Delete.**
   - Expand/collapse implemented for folder tree panel.
@@ -61,9 +61,10 @@ This PRD outlines the completed MVP and ongoing development phases.
 #### 3.1.3 Effective Search
 - **Description**: Fast search by title, URL, and notes.
 - **Requirements Met**:
-  - Added `SearchBar` component.
+  - Added `SearchBar` component **(moved to right panel)**.
   - Implemented real-time filtering logic (`filterBookmarkTree`) updating both folder tree (dimming non-matches) and content panel.
   - Search is case-insensitive and includes a clear button.
+- **Requirements Pending/Needs Refinement**: **Search filtering is currently broken and needs debugging.**
 - **Success Criteria**: Functionality implemented. Performance with large datasets needs validation.
 
 #### 3.1.4 Duplicate Identification
@@ -71,14 +72,14 @@ This PRD outlines the completed MVP and ongoing development phases.
 - **Requirements Met**:
   - Added `findDuplicateUrls` in `treeUtils.ts`.
   - Highlighted duplicates in the content panel (`BookmarkListPanel` via `BookmarkItem`).
-  - Added "Remove Duplicates" button with confirmation dialog (`App.tsx`).
+  - Added "Remove Duplicates" button with confirmation dialog (`App.tsx`). **Button moved to top action bar.**
 - **Success Criteria**: Functionality implemented and verified.
 
 #### 3.1.5 Bookmark Export
 - **Description**: Export bookmark tree as Chrome/Edge-compatible HTML.
 - **Requirements Met**:
   - Added `generateBookmarkHtml` in `bookmarkParser.ts`.
-  - Triggered download in `App.tsx` using `Blob` and named `zenmark_bookmarks.html`.
+  - Triggered download in `App.tsx` using `Blob` and named `zenmark_bookmarks.html`. **Button moved to top action bar.**
 - **Success Criteria**: Functionality implemented. Compatibility testing needed.
 
 ### 3.2 Non-Functional Requirements
@@ -86,7 +87,7 @@ This PRD outlines the completed MVP and ongoing development phases.
 - **Compatibility**: Supports Chrome/Edge bookmark HTML format (basic validation done).
 - **Persistence**: Bookmark data persists in IndexedDB across browser sessions (verified).
 - **Accessibility**: Basic keyboard navigation **not yet implemented**.
-- **Responsive**: Basic layout exists, further testing needed for tablet responsiveness.
+- **Responsive**: Basic layout exists, **responsive breakpoints adjusted (`lg:`)**. Further testing needed.
 
 ## 4. Technical Requirements
 - **Frontend**: React 18.2.0, TypeScript 5.2.2.
@@ -96,7 +97,7 @@ This PRD outlines the completed MVP and ongoing development phases.
 - **Parsing**: `FileReader`, `DOMParser`.
 - **Storage**: IndexedDB (`idb` library).
 - **State**: React `useState`, `useCallback`, `useMemo`.
-- **Virtualization**: `react-window` (^1.8.x).
+- **Virtualization**: `react-window` (^1.8.x), **`react-virtualized-auto-sizer`**. 
 - **Dependencies**: Updated `package.json`.
 - **Project Structure** (Updated conceptual structure):
   ```
@@ -106,13 +107,17 @@ This PRD outlines the completed MVP and ongoing development phases.
   │   ├── components/
   │   │   ├── FileUpload.tsx
   │   │   ├── SearchBar.tsx
-  │   │   ├── FolderTreePanel.tsx  // New
-  │   │   ├── BookmarkListPanel.tsx // New
-  │   │   └── BookmarkItem.tsx      // Reused item renderer
+  │   │   ├── FolderTreePanel.tsx
+  │   │   ├── BookmarkListPanel.tsx
+  │   │   ├── BookmarkItem.tsx
+  │   │   ├── Modal.tsx
+  │   │   ├── AddFolderModalContent.tsx
+  │   │   └── AddBookmarkModalContent.tsx
   │   ├── utils/
   │   │   ├── bookmarkParser.ts
   │   │   ├── bookmarkStorage.ts
-  │   │   └── treeUtils.ts
+  │   │   ├── treeUtils.ts
+  │   │   └── debounce.ts 
   │   ├── types/
   │   │   └── bookmark.ts (contains BookmarkNode, FlattenedBookmarkNode)
   │   ├── styles/
@@ -123,15 +128,16 @@ This PRD outlines the completed MVP and ongoing development phases.
   ```
 
 ## 5. User Interface Requirements
-- **Layout**: Updated to a **two-panel layout**. Left panel shows a virtualized folder tree. Right panel shows a virtualized list of the selected folder's contents (bookmarks only). Top bar contains header, file upload, search, and action buttons (Export, Remove Duplicates).
+- **Layout**: Updated to include a **dedicated header** (Logo/Title), a **top action bar** (Upload, Export, etc.), and **two main panels**. Left panel shows a virtualized folder tree. Right panel shows a virtualized list of the selected folder's contents (bookmarks only) with a **heading and search bar above the list**.
 - **Components**:
-  - **FileUpload**: (Unchanged).
-  - **SearchBar**: (Unchanged).
-  - **FolderTreePanel**: Displays virtualized, hierarchical folder list with expand/collapse, selection highlighting. Dims non-matching folders during search.
-  - **BookmarkListPanel**: Displays virtualized list of bookmarks for the selected folder. Handles duplicate highlighting and right-click deletion.
-  - **BookmarkItem**: Reusable component for rendering individual bookmarks/folders (used by BookmarkListPanel, potentially adaptable for FolderTreePanel row if needed).
-- **Styling**: (Largely unchanged, adapted for two panels).
-- **Responsive**: Needs review for two-panel layout on smaller screens.
+  - **FileUpload**: (Unchanged, moved to action bar).
+  - **SearchBar**: (Unchanged, moved to right panel header).
+  - **FolderTreePanel**: Displays virtualized, hierarchical folder list with expand/collapse, selection highlighting. Dims non-matching folders during search. **Heading style updated. Row height increased.** **TODO: Add "All Bookmarks" root representation.** **TODO: Add "Add Folder" button in header.**
+  - **BookmarkListPanel**: Displays virtualized list of bookmarks for the selected folder. Handles duplicate highlighting and right-click deletion. **TODO: Add "Add Bookmark" button in header.**
+  - **BookmarkItem**: Reusable component for rendering individual bookmarks/folders. **Text left-aligned.**
+  - **Modal Components**: Used for adding/editing.
+- **Styling**: (Largely unchanged, adapted for new layout).
+- **Responsive**: **Layout switches from vertical stack to horizontal (`lg:`)**. Top action bar reflows. Needs further review.
 
 ## 6. Development Phases
 ### Phase 1: MVP Core (Completed)
@@ -154,15 +160,19 @@ This PRD outlines the completed MVP and ongoing development phases.
     *   ✅ Moving folders between levels (including root).
 *   **DONE:** ~~Bookmark Saving:~~ Persist bookmark data locally (e.g., IndexedDB).
 *   **DONE:** ~~UI Polish: Modals~~ Replace `window.prompt` for Add/Edit with proper modals.
+*   **DONE:** ~~UI Polish: Layout/Styling~~ Refactor main layout, adjust text alignment, increase folder row height.
 *   **UI Polish:** Improve inline editing UI/UX.
-*   **UI Polish:** Responsiveness (ensure usability on smaller screens).
+*   **UI Polish (In Progress):** Responsiveness (ensure usability on smaller screens).
+*   **NEW (TODO): Search Functionality:** Fix search filtering (currently broken).
+*   **DONE:** ~~UI Polish: Implement "Add New" buttons in panel headers.~~
+*   **NEW (TODO): UI Polish:** Add "All Bookmarks" root representation in folder tree.
 *   **DEFERRED:** ~~Performance Validation:~~ Test with large bookmark files (e.g., 10k+ items).
 
 ### Phase 3: Advanced Features
 
 *   **DONE:** ~~Search/Filtering:~~ Implement efficient search across titles, URLs, tags, notes.
 *   Duplicate Detection/Resolution.
-*   Bulk Actions (e.g., delete multiple items).
+*   **NEW (TODO): Multi-select & Bulk Actions:** Implement multi-selection and a "Delete Selected" action.
 *   More Robust Error Handling.
 
 ### Future Enhancements
@@ -188,7 +198,7 @@ This PRD outlines the completed MVP and ongoing development phases.
   - **Mitigation**: Incremental implementation planned. Test thoroughly. Refer to `@dnd-kit` documentation for virtualization strategies if needed.
 - **Risk**: Browser compatibility issues (HTML format, IndexedDB).
   - **Mitigation**: Test with Chrome and Edge bookmark HTML files. Test IndexedDB in target browsers.
-- **Risk**: Virtualization library integration issues (`react-window`).
+- **Risk**: Virtualization library integration issues (`react-window`, `react-virtualized-auto-sizer`).
   - **Mitigation**: Addressed initial integration. Monitor for edge cases or performance issues.
 
 ## 9. Future Enhancements
@@ -198,6 +208,6 @@ This PRD outlines the completed MVP and ongoing development phases.
 - AI-driven categorization.
 
 ## 10. Appendix
-- **Tech Stack**: React, TypeScript, Vite, Tailwind CSS, `@dnd-kit/core`, IndexedDB, **`react-window`**.
+- **Tech Stack**: React, TypeScript, Vite, Tailwind CSS, `@dnd-kit/core`, IndexedDB, `idb`, `react-window`, `react-virtualized-auto-sizer`.
 - **References**: User trends (massive collections, poor UX, scalability needs).
 - **Stakeholders**: Developer (4DVibes), Chrome/Edge users.

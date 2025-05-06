@@ -7,3 +7,4 @@ package-lock.json # If you're using npm
 yarn.lock       # If you're using Yarn
 npm-debug.log*
 yarn-error.log*
+src/docs/bookmarks_5_1_25.html

@@ -23,7 +23,7 @@ const AddBookmarkModalContent: React.FC<AddBookmarkModalContentProps> = ({ onCan
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} id="add-bookmark-form" className="space-y-4">
             <div>
                 <label htmlFor="bookmarkTitle" className="block text-sm font-medium text-gray-700 mb-1">
                     Bookmark Title:

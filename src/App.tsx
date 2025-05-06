@@ -51,6 +51,7 @@ import { debounce } from './utils/debounce';
 import Modal from './components/Modal';
 import AddFolderModalContent from './components/AddFolderModalContent';
 import AddBookmarkModalContent from './components/AddBookmarkModalContent';
+import zenmarkLogo from './assets/zenmark_logo.png';
 
 const SAVE_DEBOUNCE_DELAY = 500;
 const SEARCH_DEBOUNCE_DELAY = 300;
@@ -356,9 +357,10 @@ const App: React.FC = () => {
       id: uuidv4(),
       title: folderName,
       children: [],
-      parentId: modalTargetParentId
+      parentId: modalTargetParentId === ROOT_FOLDER_DROP_ID ? null : modalTargetParentId
     };
-    handleTreeUpdate(currentBookmarks => insertNode(currentBookmarks, modalTargetParentId, newNode, 'inside'));
+    const actualTargetId = modalTargetParentId === ROOT_FOLDER_DROP_ID ? null : modalTargetParentId;
+    handleTreeUpdate(currentBookmarks => insertNode(currentBookmarks, actualTargetId, newNode, 'inside'));
     setIsAddFolderModalOpen(false); // Close modal
   }, [modalTargetParentId, handleTreeUpdate]);
 
@@ -366,16 +368,20 @@ const App: React.FC = () => {
     console.log(`[App] Saving new bookmark "${title}" for parent: ${modalTargetParentId ?? 'root'}`);
     if (!title || !url) return;
 
+    const actualTargetParentIdForNode = modalTargetParentId === ROOT_FOLDER_DROP_ID ? null : modalTargetParentId;
+
     const newBookmark: BookmarkNode = {
       id: uuidv4(),
       title: title,
       url: url,
-      parentId: modalTargetParentId,
+      parentId: actualTargetParentIdForNode,
       children: undefined,
     };
     handleTreeUpdate(currentBookmarks => {
-      const position = modalTargetParentId ? 'inside' : 'root';
-      return insertNode(currentBookmarks, modalTargetParentId, newBookmark, position);
+      const isRootInsert = modalTargetParentId === ROOT_FOLDER_DROP_ID || modalTargetParentId === null;
+      const position = isRootInsert ? 'root' : 'inside';
+      const actualTargetIdForInsert = isRootInsert ? null : modalTargetParentId;
+      return insertNode(currentBookmarks, actualTargetIdForInsert, newBookmark, position);
     });
     setIsAddBookmarkModalOpen(false); // Close modal
   }, [modalTargetParentId, handleTreeUpdate]);
@@ -598,11 +604,11 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
         <div className="bg-white shadow-md rounded-lg p-4 max-w-7xl w-full h-[85vh] flex flex-col">
           <div className="flex items-center space-x-3 mb-4 pb-4 border-b border-gray-200 flex-shrink-0">
-            <span className="text-4xl">🧘</span>
-            <h1 className="text-2xl font-bold text-gray-800">Zenmark</h1>
+            <img src={zenmarkLogo} alt="Zenmark Logo" className="h-20 w-20" />
+            <h1 className="text-2xl font-bold text-gray-800 uppercase font-sans font-light">Zenmark</h1>
           </div>
 
-          <div className="flex flex-col space-y-4 lg:flex-row lg:space-y-0 lg:justify-between lg:items-center mb-4 pb-4 border-b border-gray-200 flex-shrink-0">
+          <div className="flex flex-col space-y-4 lg:flex-row lg:space-y-0 lg:justify-between lg:items-center mb-4 pb-4 flex-shrink-0">
             <div className="flex flex-col space-y-2 lg:flex-row lg:space-y-0 lg:items-center lg:space-x-4">
               <FileUpload
                 onUpload={handleFileUpload}
@@ -617,6 +623,9 @@ const App: React.FC = () => {
             {/* Responsive: Stack vertical, align end default. Row, center, spaced on lg */}
             <div className="flex flex-col items-end space-y-2 lg:flex-row lg:items-center lg:space-y-0 lg:space-x-2">
               {error && <p className="error-message text-red-600 text-sm text-right lg:text-left lg:mr-4 w-full lg:w-auto">Error: {error}</p>} { /* Adjusted error alignment/width */}
+              <div className="w-full lg:w-auto lg:max-w-xs"> {/* SearchBar container */}
+                <SearchBar query={searchTerm} onQueryChange={handleSearch} />
+              </div>
               {duplicateIds.size > 0 && (
                 <button
                   onClick={handleRemoveDuplicates}
@@ -633,7 +642,7 @@ const App: React.FC = () => {
                 // Responsive: Full width default, auto on lg
                 className={`bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline text-sm w-full lg:w-auto ${bookmarks.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                Export Bookmarks
+                Export
               </button>
             </div>
           </div>
@@ -655,12 +664,6 @@ const App: React.FC = () => {
             </div>
 
             <div className="w-full lg:flex-grow h-full min-w-0 flex flex-col">
-              <div className="flex justify-between items-center pb-2 mb-2 border-b border-gray-200 flex-shrink-0">
-                <h2 className="text-lg font-semibold text-gray-700">Bookmarks</h2>
-                <div className="w-full max-w-xs">
-                  <SearchBar query={searchTerm} onQueryChange={handleSearch} />
-                </div>
-              </div>
               <div className="flex-grow overflow-auto">
                 <BookmarkListPanel
                   bookmarkNodes={rightPanelNodes}
