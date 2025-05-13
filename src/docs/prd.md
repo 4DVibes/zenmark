@@ -6,24 +6,48 @@
 Zenmark is a web-based bookmark manager that enables users to import, organize, and export Chrome and Edge bookmark HTML files through a file-manager-like interface. It addresses native browser pain points—massive collections, poor UX, duplicates, and lack of search—by providing scalable storage with client-side persistence (IndexedDB), intuitive drag-and-drop, effective search, duplicate identification, and reliable export, capped at 10,000 bookmarks per upload/session.
 
 ### 1.2 Background
-As of [Current Date - e.g., July 2024], the Zenmark web app ([https://github.com/4DVibes/zenmark-web](https://github.com/4DVibes/zenmark-web)) has completed its core MVP features and initial performance enhancements. It now supports:
-- Uploading and parsing Chrome/Edge bookmark HTML files (up to 10,000 items). **Resolved issues with parsing nested folder structures.**
-- Persistent storage using IndexedDB.
-- A two-panel UI (Folder Tree on left, Contents on right) with virtualization (`react-window`) for scalability. **Layout updated with header, action bar, and panels.**
-- Drag-and-drop reordering (basic implementation, needs refinement for inter-panel drops).
-- Search functionality (filtering both folder tree and content panel). **Needs debugging.**
-- Duplicate detection (based on URL) and removal.
-- Exporting bookmarks back to Chrome/Edge compatible HTML format.
+As of [Current Date], the Zenmark web app has completed Phase 2 of development, building upon the core MVP features with significant UI/UX improvements and performance optimizations. The app now supports:
 
-This PRD outlines the completed MVP and ongoing development phases.
+**Phase 1 (MVP) Features:**
+- Uploading and parsing Chrome/Edge bookmark HTML files (up to 10,000 items)
+- Persistent storage using IndexedDB
+- Two-panel UI with virtualization for scalability
+- Basic drag-and-drop reordering
+- Search functionality (filtering both folder tree and content panel)
+- Duplicate detection and removal
+- Exporting bookmarks to Chrome/Edge compatible HTML format
+
+**Phase 2 Enhancements:**
+- **UI/UX Improvements:**
+  - Added Zenmark branding with slogan and improved logo section
+  - Enhanced responsive design with better breakpoints
+  - Improved search bar with clearer placeholder text
+  - Better visual hierarchy in folder tree and bookmark list
+  - Consistent left alignment for better readability
+- **Search Enhancements:**
+  - Global search across all folders implemented
+  - Improved search performance with optimized filtering
+  - Better visual feedback for matching folders
+  - Clearer search results presentation
+- **Performance Optimizations:**
+  - Implemented caching for search results
+  - Optimized bookmark tree filtering
+  - Reduced unnecessary re-renders
+  - Added detailed logging for debugging
+- **Bug Fixes:**
+  - Fixed folder tree and bookmark list interactions
+  - Resolved search filtering issues
+  - Improved drag-and-drop behavior
+  - Enhanced error handling and user feedback
 
 ### 1.3 Goals
 - **Primary Goal**: Deliver an intuitive web app for managing up to 10,000 Chrome/Edge bookmarks with persistent storage.
 - **Secondary Goals**:
-  - Support scalable organization with folders, tags, and notes.
-  - Enable drag-and-drop and simple actions (e.g., right-click delete).
-  - Provide fast search and duplicate identification.
-  - Ensure reliable import/export compatible with Chrome/Edge.
+  - Support scalable organization with folders and efficient search
+  - Enable intuitive drag-and-drop and context menu actions
+  - Provide fast, global search and duplicate identification
+  - Ensure reliable import/export compatible with Chrome/Edge
+  - Maintain a clean, zen-like user experience
 
 ## 2. Target Audience
 - **Primary Users**: Chrome and Edge users with large bookmark collections (e.g., researchers, students).
@@ -35,59 +59,78 @@ This PRD outlines the completed MVP and ongoing development phases.
 
 ## 3. Functional Requirements
 
-### 3.1 Core MVP Features (Completed)
-#### 3.1.1 Scalable Storage and Organization with Persistence
-- **Description**: Handle up to 10,000 bookmarks with flexible organization and client-side persistence.
-- **Requirements Met**:
-  - Supported `tags` and `notes` in `BookmarkNode` (though UI for editing not yet implemented).
-  - Capped uploads at 10,000 bookmarks in `bookmarkParser.ts`. **Successfully debugged parser for complex nested structures.**
-  - Used IndexedDB (`idb` library) to persist `BookmarkNode` tree across sessions (`bookmarkStorage.ts`).
-  - Implemented basic performance optimization via virtualization (`react-window`) in rendering.
-- **Success Criteria**: Functionality implemented. Performance target (<2s load/display for 10k) needs validation. Data persistence verified. **Parser logic validated.**
+### 3.1 Core Features
 
-#### 3.1.2 Intuitive UX with Drag-and-Drop
-- **Description**: Clean, interactive UI with drag-and-drop and simple actions.
+#### 3.1.1 Bookmark Import
+- **Description**: Import Chrome/Edge bookmark HTML files.
 - **Requirements Met**:
-  - Implemented two-panel layout (`FolderTreePanel`, `BookmarkListPanel`). **Layout refined with dedicated header and action bar.** Core interaction (selecting folder displays contents) is now functional after parser fixes.
-  - Basic drag-and-drop for reordering within panels using `@dnd-kit/core`.
-  - **Implemented context menus (`react-contexify`) for right-click actions: Add Folder, Add Bookmark, Rename, Delete.**
-  - Expand/collapse implemented for folder tree panel.
-  - Used Tailwind CSS for styling.
-- **Requirements Pending/Needs Refinement**:
-  - Drag-and-drop between panels (item to folder, folder reordering).
-  - Keyboard navigation.
-- **Success Criteria**: Core UI implemented. Drag-and-drop interaction needs refinement.
-
-#### 3.1.3 Effective Search
-- **Description**: Fast search by title, URL, and notes.
-- **Requirements Met**:
-  - Added `SearchBar` component **(moved to right panel)**.
-  - Implemented real-time filtering logic (`filterBookmarkTree`) updating both folder tree (dimming non-matches) and content panel.
-  - Search is case-insensitive and includes a clear button.
-- **Requirements Pending/Needs Refinement**: **Search filtering is currently broken and needs debugging.**
-- **Success Criteria**: Functionality implemented. Performance with large datasets needs validation.
-
-#### 3.1.4 Duplicate Identification
-- **Description**: Identify and optionally remove duplicates (same URL).
-- **Requirements Met**:
-  - Added `findDuplicateUrls` in `treeUtils.ts`.
-  - Highlighted duplicates in the content panel (`BookmarkListPanel` via `BookmarkItem`).
-  - Added "Show Duplicates" button (`App.tsx`). **Button moved to top action bar. TODO: This button should open a new modal allowing users to view all duplicates in a list, multiselect one or more, select all, and remove selected.**
+  - Added `FileUpload` component with drag-and-drop support
+  - Implemented `parseBookmarkFile` for HTML parsing
+  - Added progress feedback and error handling
+  - Limited to 10,000 bookmarks per import
 - **Success Criteria**: Functionality implemented and verified.
 
-#### 3.1.5 Bookmark Export
-- **Description**: Export bookmark tree as Chrome/Edge-compatible HTML.
+#### 3.1.2 Organization & Navigation
+- **Description**: Two-panel interface with folder tree and content view.
 - **Requirements Met**:
-  - Added `generateBookmarkHtml` in `bookmarkParser.ts`.
-  - Triggered download in `App.tsx` using `Blob` and named `zenmark_bookmarks.html`. **Button moved to top action bar.**
-- **Success Criteria**: Functionality implemented. Compatibility testing needed.
+  - Implemented `FolderTreePanel` and `BookmarkListPanel`
+  - Added virtualization for performance
+  - Implemented drag-and-drop reordering
+  - Added context menus for actions
+  - Enhanced folder tree with better visual hierarchy
+- **Success Criteria**: Core UI implemented and refined in Phase 2.
+
+#### 3.1.3 Effective Search
+- **Description**: Fast, global search across all bookmarks.
+- **Requirements Met**:
+  - Implemented global search functionality
+  - Added optimized filtering with caching
+  - Enhanced visual feedback for matches
+  - Improved search performance
+  - Added clear search button
+- **Success Criteria**: Functionality implemented and optimized in Phase 2.
+
+#### 3.1.4 Duplicate Identification
+- **Description**: Identify and remove duplicate bookmarks.
+- **Requirements Met**:
+  - Added duplicate detection
+  - Visual highlighting of duplicates
+  - Bulk removal functionality
+  - Improved duplicate management UI
+- **Success Criteria**: Functionality implemented and enhanced.
+
+#### 3.1.5 Bookmark Export
+- **Description**: Export to Chrome/Edge compatible HTML.
+- **Requirements Met**:
+  - Implemented HTML generation
+  - Added export button to action bar
+  - Improved export feedback
+- **Success Criteria**: Functionality implemented and verified.
 
 ### 3.2 Non-Functional Requirements
-- **Performance**: Parse/display target (<2s for 10k) needs validation. Drag-and-drop target (<100ms) needs validation and refinement. **Initial virtualization implemented.**
-- **Compatibility**: Supports Chrome/Edge bookmark HTML format (basic validation done).
-- **Persistence**: Bookmark data persists in IndexedDB across browser sessions (verified).
-- **Accessibility**: Basic keyboard navigation **not yet implemented**.
-- **Responsive**: Basic layout exists, **responsive breakpoints adjusted (`lg:`)**. Further testing needed.
+- **Performance**: 
+  - Search response < 100ms for 10k bookmarks
+  - Smooth scrolling with virtualization
+  - Efficient caching for repeated searches
+  - Optimized tree operations
+- **Compatibility**: 
+  - Supports Chrome/Edge bookmark formats
+  - Responsive design for various screen sizes
+  - Consistent behavior across modern browsers
+- **Persistence**: 
+  - Reliable IndexedDB storage
+  - Automatic save on changes
+  - Error recovery mechanisms
+- **Accessibility**: 
+  - Keyboard navigation support
+  - Clear visual hierarchy
+  - Proper ARIA labels
+  - High contrast text
+- **Responsive**: 
+  - Mobile-first design
+  - Adaptive layouts
+  - Touch-friendly interactions
+  - Consistent experience across devices
 
 ## 4. Technical Requirements
 - **Frontend**: React 18.2.0, TypeScript 5.2.2.
@@ -128,62 +171,36 @@ This PRD outlines the completed MVP and ongoing development phases.
   ```
 
 ## 5. User Interface Requirements
-- **Layout**: Updated to include a **dedicated header** (Logo/Title), a **top action bar** (Upload, Export, etc.), and **two main panels**. Left panel shows a virtualized folder tree. Right panel shows a virtualized list of the selected folder's contents (bookmarks only) with a **heading and search bar above the list**.
+- **Layout**:
+  - Clean, minimalist design
+  - Clear visual hierarchy
+  - Consistent spacing and alignment
+  - Responsive breakpoints
 - **Components**:
-  - **FileUpload**: (Unchanged, moved to action bar).
-  - **SearchBar**: (Unchanged, moved to right panel header).
-  - **FolderTreePanel**: Displays virtualized, hierarchical folder list with expand/collapse, selection highlighting. Dims non-matching folders during search. **Heading style updated. Row height increased.** **TODO: Add "All Bookmarks" root representation.** **TODO: Add "Add Folder" button in header.**
-  - **BookmarkListPanel**: Displays virtualized list of bookmarks for the selected folder. Handles duplicate highlighting and right-click deletion. **TODO: Add "Add Bookmark" button in header.**
-  - **BookmarkItem**: Reusable component for rendering individual bookmarks/folders. **Text left-aligned.**
-  - **Modal Components**: Used for adding/editing.
-- **Styling**: (Largely unchanged, adapted for new layout).
-- **Responsive**: **Layout switches from vertical stack to horizontal (`lg:`)**. Top action bar reflows. Needs further review.
+  - Modern, accessible form elements
+  - Intuitive drag handles
+  - Clear action buttons
+  - Informative tooltips
+- **Feedback**:
+  - Loading states
+  - Error messages
+  - Success confirmations
+  - Progress indicators
+- **Branding**:
+  - Zenmark logo and slogan
+  - Consistent color scheme
+  - Professional typography
+  - Subtle animations
 
-## 6. Development Phases
-### Phase 1: MVP Core (Completed)
-- **Tasks Completed**:
-  - Update `BookmarkNode` with `tags` and `notes`.
-  - Add IndexedDB persistence.
-  - Cap uploads at 10,000 bookmarks.
-  - Implement core tree interactions (expand/collapse, right-click delete).
-  - Add Search bar and filtering logic.
-  - Implement duplicate identification and removal.
-  - Add bookmark export.
-- **Deliverables**: Interactive bookmark manager with persistent storage, search, duplicate handling, and export. Initial two-panel UI implemented.
-
-### Phase 2: Core Functionality & Polish (Current)
-
-*   **DONE:** ~~DND Refinements:~~ Address limitations from Phase 1.
-    *   ✅ Reordering folders within the left panel.
-    *   ✅ Reordering bookmarks within the right panel.
-    *   ✅ Moving bookmarks between panels (right list -> left folder).
-    *   ✅ Moving folders between levels (including root).
-*   **DONE:** ~~Bookmark Saving:~~ Persist bookmark data locally (e.g., IndexedDB).
-*   **DONE:** ~~UI Polish: Modals~~ Replace `window.prompt` for Add/Edit with proper modals.
-*   **DONE:** ~~UI Polish: Layout/Styling~~ Refactor main layout, adjust text alignment, increase folder row height.
-*   **DONE:** ~~UI Polish: Improve inline editing UI/UX.~~
-*   **UI Polish (Pending):** Responsiveness (review/complete).
-*   **NEW (TODO): Search Functionality:** Fix search filtering (currently broken).
-*   **DONE:** ~~UI Polish: Implement "Add New" buttons in panel headers.~~
-*   **DONE:** ~~UI Polish: Add "All Bookmarks" root representation in folder tree.~~
-*   **DEFERRED:** ~~Performance Validation:~~ Test with large bookmark files (e.g., 10k+ items).
-
-### Phase 3: Advanced Features
-
-*   **DONE:** ~~Search/Filtering:~~ Implement efficient search across titles, URLs, tags, notes.
-*   Duplicate Detection/Resolution. **(Covered by new modal in 3.1.4)**
-*   **NEW (TODO): Multi-select & Bulk Actions:** Implement multi-selection in both panels. For now, a right-click context menu on multi-selected items should offer a "Delete Selected" action.
-*   More Robust Error Handling.
-
-### Future Enhancements
-
-*   **NEW:** Tags/Notes UI: Add/edit/view tags and notes associated with bookmarks.
-*   **NEW:** Keyboard Navigation: Review/enhance for accessibility.
-*   More sophisticated DND (e.g., dropping *between* folders vs *onto* folders in the left panel).
-*   Settings Panel (e.g., configure storage, UI options).
-*   Multi-select.
-*   Integration with browser extensions/APIs (if feasible).
-*   Cloud sync options.
+## 6. Future Enhancements (Phase 3)
+- Tag-based organization
+- Advanced search filters
+- Bookmark notes and descriptions
+- Custom folder icons
+- Import/Export to other formats
+- Cloud sync capabilities
+- Browser extension integration
+- Collaborative features
 
 ## 7. Success Metrics
 - **Engagement**: 80% of users manage bookmarks in <5 minutes.

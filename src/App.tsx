@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import './App.css';
 import 'react-contexify/dist/ReactContexify.css';
 import { Theme, Item, Menu, Separator, Submenu, useContextMenu } from 'react-contexify';
@@ -40,8 +40,7 @@ import {
   extractFolderTree,
   getNodeChildren,
   countNodesByType,
-  addNodeToTree,
-  mapTree
+  addNodeToTree
 } from './utils/treeUtils';
 import FolderContextMenu from './components/FolderContextMenu';
 import BookmarkContextMenu from './components/BookmarkContextMenu';
@@ -87,19 +86,58 @@ const App: React.FC = () => {
   const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
   const [isAddBookmarkModalOpen, setIsAddBookmarkModalOpen] = useState(false);
   const [modalTargetParentId, setModalTargetParentId] = useState<string | null>(null);
+  const filterCacheRef = useRef<Map<string, FilterResults>>(new Map());
+  const renderCountRef = useRef(0);
 
   const debouncedSave = useMemo(() => debounce(saveBookmarks, SAVE_DEBOUNCE_DELAY), []);
 
-  // Apply search filtering to the entire bookmark tree
-  const { filteredNodes: filteredBookmarksMemo, matchingFolderIds: FOLDER_IDS_MATCHING_SEARCH_QUERY } = useMemo(() => {
-    console.log(`[App] Filtering all bookmarks with searchTerm: "${searchTerm}"`);
+  // Memoize the search handler to prevent unnecessary re-renders
+  const handleSearch = useCallback((term: string) => {
+    console.log('🔍 [App:handleSearch] Search term changed:', term, '(Component re-render count:', renderCountRef.current++, ')');
+    setSearchTerm(term);
+  }, []); // Empty deps array since it only uses setSearchTerm which is stable
+
+  const { filteredBookmarksMemo, FOLDER_IDS_MATCHING_SEARCH_QUERY } = useMemo(() => {
+    console.log('🔄 [App:useMemo] Starting filter calculation with searchTerm:', searchTerm, '(Component re-render count:', renderCountRef.current++, ')');
     if (!searchTerm) {
-      return { filteredNodes: bookmarks, matchingFolderIds: new Set<string>() };
+      console.log('  No search term, returning original bookmarks');
+      return { filteredBookmarksMemo: bookmarks, FOLDER_IDS_MATCHING_SEARCH_QUERY: new Set<string>() };
     }
-    const results = filterBookmarkTree(bookmarks, searchTerm);
-    console.log(`[App] filterBookmarkTree results: ${results.filteredNodes.length} nodes, ${results.matchingFolderIds.size} matching folders`);
-    return results;
+
+    // Log the current cache state
+    console.log('  Current cache size:', filterCacheRef.current.size);
+    console.log('  Cache keys:', Array.from(filterCacheRef.current.keys()));
+
+    // Only clear the cache if the bookmarks tree has changed
+    // This allows us to reuse cached results for the same search term
+    if (filterCacheRef.current.size > 0) {
+      const firstKey = Array.from(filterCacheRef.current.keys())[0];
+      const [nodeIdsHash] = firstKey.split('|');
+      const currentHash = bookmarks.map(n => n.id).sort().join('').split('').reduce((hash, char) => {
+        return ((hash << 5) - hash) + char.charCodeAt(0) | 0;
+      }, 0).toString(36);
+
+      if (nodeIdsHash !== currentHash) {
+        console.log('  Bookmark tree changed, clearing filter cache...');
+        filterCacheRef.current.clear();
+      } else {
+        console.log('  Bookmark tree unchanged, reusing cache...');
+      }
+    }
+
+    console.log('  Filtering bookmarks...');
+    const { filteredNodes, matchingFolderIds } = filterBookmarkTree(bookmarks, searchTerm, filterCacheRef.current);
+    console.log(`  Filter complete: found ${filteredNodes.length} matching nodes and ${matchingFolderIds.size} matching folders`);
+    return {
+      filteredBookmarksMemo: filteredNodes,
+      FOLDER_IDS_MATCHING_SEARCH_QUERY: matchingFolderIds
+    };
   }, [bookmarks, searchTerm]);
+
+  // Add a debug effect to track re-renders
+  useEffect(() => {
+    console.log('🔄 [App] Component re-rendered. Current searchTerm:', searchTerm);
+  });
 
   const handleTreeUpdate = useCallback((newTreeOrUpdater: BookmarkNode[] | ((currentTree: BookmarkNode[]) => BookmarkNode[])) => {
     console.log('[App] handleTreeUpdate called...');
@@ -355,10 +393,6 @@ const App: React.FC = () => {
     });
   }, [handleTreeUpdate]);
 
-  const handleSearch = (term: string) => {
-    setSearchTerm(term);
-  };
-
   const handleSelectFolder = useCallback((folderId: string | null) => {
     console.log('[App] Selected Folder ID:', folderId);
     setSelectedFolderId(folderId ?? ROOT_FOLDER_DROP_ID);
@@ -583,31 +617,62 @@ const App: React.FC = () => {
   }, [bookmarks]);
 
   const rightPanelNodesToDisplay = useMemo(() => {
+    // Early exit for common case: no search and showing root bookmarks
+    if (!searchTerm && selectedFolderId === ROOT_FOLDER_DROP_ID) {
+      // Use a more efficient filter for root bookmarks
+      const rootBookmarks = bookmarks.filter(node => !node.children && !node.parentId);
+      return rootBookmarks;
+    }
+
     console.log(`[App] Recalculating rightPanelNodesToDisplay for selectedFolderId: ${selectedFolderId} with searchTerm: "${searchTerm}"`);
     const sourceTree = searchTerm ? filteredBookmarksMemo : bookmarks;
 
+    // When searching, show all matching bookmarks regardless of folder
+    if (searchTerm) {
+      // Flatten the tree and filter for bookmarks only
+      const allMatchingBookmarks = sourceTree.reduce<BookmarkNode[]>((acc, node) => {
+        if (!node.children) {
+          // It's a bookmark, add it
+          acc.push(node);
+        } else if (node.children) {
+          // It's a folder, recursively add its bookmarks
+          const folderBookmarks = node.children.filter(child => !child.children);
+          acc.push(...folderBookmarks);
+        }
+        return acc;
+      }, []);
+      console.log(`[App] Search active. Found ${allMatchingBookmarks.length} matching bookmarks across all folders`);
+      return allMatchingBookmarks;
+    }
+
+    // Handle root folder selection (no search)
     if (selectedFolderId === ROOT_FOLDER_DROP_ID) {
-      // If searching, show all top-level bookmarks from the filtered tree.
-      // If not searching, show only true root bookmarks from the original tree.
+      // For root folder, we only need to filter bookmarks (not folders)
       const rootBookmarks = sourceTree.filter(node =>
-        node.children === undefined && // It's a bookmark
-        (searchTerm ? true : node.parentId === null) // If searching, any top-level; else, only actual root
+        !node.children && // It's a bookmark
+        !node.parentId // Only actual root bookmarks
       );
-      console.log(`[App] Root selected. Found ${rootBookmarks.length} root bookmarks from sourceTree.`);
+      console.log(`[App] Root selected. Found ${rootBookmarks.length} bookmarks from sourceTree.`);
       return rootBookmarks;
-    } else if (selectedFolderId) {
-      // Find the selected folder within the appropriate tree (filtered or original)
+    }
+
+    // Handle folder selection (no search)
+    if (selectedFolderId) {
       const folder = findNodeById(sourceTree, selectedFolderId);
-      if (folder && folder.children) {
-        // Children are already filtered if sourceTree is filteredBookmarksMemo
-        const folderBookmarks = folder.children.filter(node => node.children === undefined);
-        console.log(`[App] Folder ${selectedFolderId} (${folder.title}) selected. Found ${folderBookmarks.length} bookmark children in sourceTree.`);
-        return folderBookmarks;
-      } else {
+      if (!folder?.children) {
         console.warn(`[App] Selected folder ${selectedFolderId} not found in sourceTree or has no children.`);
         return [];
       }
+
+      // For folders, we only need to filter bookmarks (not folders)
+      const folderBookmarks = folder.children.filter(node =>
+        !node.children && // It's a bookmark
+        node.parentId === selectedFolderId // Only direct children
+      );
+      console.log(`[App] Folder ${selectedFolderId} (${folder.title}) selected. Found ${folderBookmarks.length} bookmarks in sourceTree.`);
+      return folderBookmarks;
     }
+
     console.log(`[App] No folderID or invalid selectedFolderId. Returning empty array for right panel.`);
     return [];
   }, [bookmarks, filteredBookmarksMemo, selectedFolderId, searchTerm]);
@@ -630,9 +695,13 @@ const App: React.FC = () => {
     >
       <div className="min-h-screen bg-[#E9EEEB] flex flex-col items-center justify-center p-4">
         <div className="bg-white shadow-md rounded-lg p-4 max-w-7xl w-full h-[85vh] flex flex-col">
-          <div className="flex items-center space-x-3 mb-4 pb-4 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-start space-x-3 mb-4 pb-4 border-b border-gray-200 flex-shrink-0">
             <img src={zenmarkLogo} alt="Zenmark Logo" className="h-20 w-20" />
-            <h1 className="text-2xl font-bold text-gray-800 uppercase font-sans font-light">Zenmark</h1>
+            <div className="flex flex-col items-start">
+              <h1 className="text-2xl font-bold text-gray-800 uppercase font-sans font-light">Zenmark</h1>
+              <p className="text-sm text-gray-600">Next level organization for your peace of mind</p>
+              <p className="text-xs text-gray-500">For Chrome and Edge</p>
+            </div>
           </div>
 
           <div className="flex flex-col space-y-4 lg:flex-row lg:space-y-0 lg:justify-between lg:items-center mb-4 pb-4 flex-shrink-0">

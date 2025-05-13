@@ -237,54 +237,88 @@ export interface FilterResults {
  * @param query The search query string.
  * @returns An object containing the filtered nodes and a set of matching folder IDs.
  */
-export const filterBookmarkTree = (nodes: BookmarkNode[], query: string): FilterResults => {
+export const filterBookmarkTree = (nodes: BookmarkNode[], query: string, cache: Map<string, FilterResults>): FilterResults => {
+    console.log('🔎 [filterBookmarkTree] Starting filter with query:', query, '(Cache size:', cache.size, ')');
+
+    // Early exit if no query
     if (!query) {
-        return { filteredNodes: nodes, matchingFolderIds: new Set() }; // No filter applied
+        console.log('  No query provided, returning original nodes');
+        return { filteredNodes: nodes, matchingFolderIds: new Set<string>() };
     }
 
-    const lowerCaseQuery = query.toLowerCase();
+    // Generate a stable cache key based on the node IDs and query
+    // Sort node IDs to ensure consistent cache keys regardless of order
+    // Use a hash of the node IDs instead of raw IDs to keep keys shorter
+    const nodeIdsHash = nodes.map(n => n.id).sort().join('').split('').reduce((hash, char) => {
+        return ((hash << 5) - hash) + char.charCodeAt(0) | 0;
+    }, 0).toString(36);
+    const cacheKey = `${nodeIdsHash}|${query.toLowerCase()}`;
+
+    // Check cache first
+    const cached = cache.get(cacheKey);
+    if (cached) {
+        console.log('✅ [filterBookmarkTree] Cache HIT for query:', query, '(Key:', cacheKey, ')');
+        return cached;
+    }
+    console.log('❌ [filterBookmarkTree] Cache MISS for query:', query, '(Key:', cacheKey, ')');
+
+    const searchTerm = query.toLowerCase();
     const filteredNodes: BookmarkNode[] = [];
-    const matchingFolderIds = new Set<string>(); // Track folders with matches
+    const matchingFolderIds = new Set<string>();
+    let matchCount = 0;
 
+    // Pre-compute lowercase versions of node properties to avoid repeated conversions
+    const nodeMatches = new Map<string, boolean>();
+    const nodeChildrenMatches = new Map<string, BookmarkNode[]>();
+
+    console.log(`  Processing ${nodes.length} nodes...`);
+
+    // First pass: compute matches for all nodes
     for (const node of nodes) {
-        const isFolder = !!node.children;
+        const selfMatch = (
+            node.title.toLowerCase().includes(searchTerm) ||
+            (node.url && node.url.toLowerCase().includes(searchTerm)) ||
+            (node.notes && node.notes.toLowerCase().includes(searchTerm))
+        );
+        nodeMatches.set(node.id, selfMatch);
 
-        // Check if the current node matches
-        const titleMatch = node.title.toLowerCase().includes(lowerCaseQuery);
-        const urlMatch = !isFolder && node.url?.toLowerCase().includes(lowerCaseQuery) || false;
-        const notesMatch = node.notes?.toLowerCase().includes(lowerCaseQuery) || false;
-        const selfMatch = titleMatch || urlMatch || notesMatch;
-
-        // Recursively check children
-        let childrenMatch = false;
-        let filteredChildren: BookmarkNode[] = [];
-        let childMatchingFolderIds = new Set<string>();
-
-        if (isFolder && node.children) {
-            const childResult = filterBookmarkTree(node.children, query);
-            filteredChildren = childResult.filteredNodes;
-            childMatchingFolderIds = childResult.matchingFolderIds;
-            childrenMatch = filteredChildren.length > 0; // Does this folder contain matches?
+        if (selfMatch) {
+            matchCount++;
+            console.log(`  📌 Match #${matchCount} found in node: ${node.title}`);
         }
 
-        // Include the node if it matches or any of its children match
+        if (node.children) {
+            // Use the same cache for child nodes
+            const childResult = filterBookmarkTree(node.children, query, cache);
+            nodeChildrenMatches.set(node.id, childResult.filteredNodes);
+            if (childResult.filteredNodes.length > 0) {
+                console.log(`  📂 Folder "${node.title}" contains ${childResult.filteredNodes.length} matches`);
+            }
+            // Merge matching folder IDs from children
+            childResult.matchingFolderIds.forEach(id => matchingFolderIds.add(id));
+        }
+    }
+
+    // Second pass: build the filtered tree
+    for (const node of nodes) {
+        const selfMatch = nodeMatches.get(node.id) || false;
+        const childrenMatch = node.children ? (nodeChildrenMatches.get(node.id)?.length || 0) > 0 : false;
+
         if (selfMatch || childrenMatch) {
-            const resultingChildren = isFolder ? filteredChildren : undefined;
+            if (node.children) {
+                matchingFolderIds.add(node.id);
+            }
             filteredNodes.push({
                 ...node,
-                children: resultingChildren
+                children: node.children ? nodeChildrenMatches.get(node.id) || [] : undefined
             });
-
-            // If this is a folder and it contains matches (or is a match itself),
-            // add its ID and any matching child folder IDs to the set.
-            if (isFolder) {
-                matchingFolderIds.add(node.id);
-                childMatchingFolderIds.forEach(id => matchingFolderIds.add(id));
-            }
         }
     }
 
-    return { filteredNodes, matchingFolderIds };
+    const result = { filteredNodes, matchingFolderIds };
+    console.log(`  Filter complete: found ${filteredNodes.length} matching nodes and ${matchingFolderIds.size} matching folders`);
+    cache.set(cacheKey, result);
+    return result;
 };
 
 /**
