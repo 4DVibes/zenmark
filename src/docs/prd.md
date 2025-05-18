@@ -201,6 +201,7 @@ As of [Current Date], the Zenmark web app has completed Phase 2 of development, 
 - Cloud sync capabilities
 - Browser extension integration
 - Collaborative features
+- **UI/UX Overhaul**: Evaluate and integrate `shadcn/ui` for a more modern design aesthetic and robust component library, potentially rebuilding parts of the application for improved maintainability and user experience.
 
 ## 7. Success Metrics
 - **Engagement**: 80% of users manage bookmarks in <5 minutes.
@@ -217,12 +218,6 @@ As of [Current Date], the Zenmark web app has completed Phase 2 of development, 
   - **Mitigation**: Test with Chrome and Edge bookmark HTML files. Test IndexedDB in target browsers.
 - **Risk**: Virtualization library integration issues (`react-window`, `react-virtualized-auto-sizer`).
   - **Mitigation**: Addressed initial integration. Monitor for edge cases or performance issues.
-
-## 9. Future Enhancements
-- Cloud syncing with Firebase.
-- Chrome/Edge extension.
-- Page content search.
-- AI-driven categorization.
 
 ## 10. Appendix
 - **Tech Stack**: React, TypeScript, Vite, Tailwind CSS, `@dnd-kit/core`, IndexedDB, `idb`, `react-window`, `react-virtualized-auto-sizer`.
